@@ -1,0 +1,13 @@
+services:
+  app:
+    build: .
+    restart: unless-stopped
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./data:/data          # base SQLite + credentials.json (persistant)
+    environment:
+      SYNC_INTERVAL_MIN: "30"   # 0 = pas de synchro automatique
+      APP_USER: "admin"
+      APP_PASSWORD: "change-me" # vide = pas d'authentification
+      CHILD_NAME: ""            # compte parent : prénom de l'enfant (optionnel si un seul)

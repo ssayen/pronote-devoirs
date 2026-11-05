@@ -1,0 +1,341 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Devoirs{{ ' — ' + child if child }}</title>
+<style>
+  :root { color-scheme: light; --bg:#f4f6fb; --fg:#1f2430; --panel:#ffffff; --col:#e9edf6; --line:#d5dbe8; --late:#c0392b;
+          --todo:#3b82f6; --doing:#f59e0b; --done:#22c55e; --shadow:#1f243026; }
+  @media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
+    color-scheme: dark; --bg:#12151c; --fg:#e6e9f0; --panel:#1b2030; --col:#1a1f2c; --line:#2d3446; --late:#ff6b5b; --shadow:#0008; } }
+  :root[data-theme="dark"] { color-scheme: dark; --bg:#12151c; --fg:#e6e9f0; --panel:#1b2030; --col:#1a1f2c; --line:#2d3446; --late:#ff6b5b; --shadow:#0008; }
+  * { box-sizing: border-box; }
+  [hidden] { display:none !important; }
+  body { font-family: system-ui, sans-serif; margin: 0; padding: 1rem; background:var(--bg); color:var(--fg); }
+  .tools { display:flex; align-items:center; gap:.8rem; }
+  .theme { border:1px solid var(--line); background:var(--panel); color:var(--fg); border-radius:999px; width:2.2rem; height:2.2rem; cursor:pointer; font-size:1.1rem; }
+  header { display:flex; justify-content:space-between; align-items:baseline; flex-wrap:wrap; gap:.5rem; margin-bottom:1rem; }
+  h1 { font-size:1.5rem; margin:0; }
+  h1 small { font-weight:400; opacity:.6; }
+  .alert { color: var(--late); font-size:.9rem; }
+  .board { display:grid; grid-template-columns: repeat(3, minmax(0,1fr)); gap:1rem; align-items:stretch; min-height:calc(100vh - 9rem); }
+  .col { display:flex; flex-direction:column; }
+  .col .cards { flex:1; }   /* toute la colonne est une zone de dépôt */
+  @media (max-width: 800px) { .board { grid-template-columns: 1fr; min-height:0; } }
+  .col { --c:var(--todo); background: var(--col); border:1px solid var(--line); border-top:4px solid var(--c); border-radius:12px; padding:.6rem; min-height:12rem; }
+  .col[data-status="doing"] { --c:var(--doing); } .col[data-status="done"] { --c:var(--done); }
+  .col.over { outline:2px dashed #2f6fed; background:#2f6fed18; }
+  /* en-tête collé en haut de l'écran pendant le défilement ; fond opaque pour masquer les cartes qui passent dessous */
+  .col h2 { position:sticky; top:0; z-index:10; font-size:1.05rem; margin:-.6rem -.6rem .6rem; padding:.7rem .8rem .5rem;
+            background:var(--col); border-radius:12px 12px 0 0; border-bottom:2px solid color-mix(in srgb, var(--c) 35%, transparent);
+            display:flex; align-items:center; gap:.5rem; font-weight:700; }
+  .col h2 .ico { display:grid; place-items:center; width:2rem; height:2rem; border-radius:50%; background:color-mix(in srgb, var(--c) 22%, transparent); font-size:1.1rem; }
+  .col h2 .n { margin-left:auto; min-width:1.6rem; text-align:center; font-size:.8rem; padding:.1rem .45rem; border-radius:999px; background:var(--c); color:#fff; }
+  .card { --h:50; background:hsl(var(--h) 90% 82%); color:#222; border-radius:4px; padding:.55rem .65rem .5rem;
+          margin-bottom:.6rem; box-shadow:0 2px 6px var(--shadow); cursor:grab; transition:transform .12s, box-shadow .12s; user-select:none; position:relative; }
+  .card:hover { transform:translateY(-2px) rotate(-.4deg); box-shadow:0 6px 12px var(--shadow); }
+  .card.bg { background-color:hsl(var(--h) 60% 92%); background-size:cover; background-position:center; }
+  /* texte à gauche sur fond blanc, qui s'estompe vers la droite pour laisser voir l'illustration */
+  .card.bg { --veil:linear-gradient(90deg, rgba(255,255,255,.94) 0%, rgba(255,255,255,.88) 45%, rgba(255,255,255,.35) 72%, rgba(255,255,255,0) 100%); }
+  .card.bg .subj, .card.bg .txt { max-width:72%; }
+  .card.dragging { opacity:.4; }
+  /* badge « Nouveau » façon étiquette promo de supermarché */
+  .new-badge { position:absolute; top:-16px; right:-12px; width:4.6rem; height:4.6rem; z-index:3; pointer-events:none;
+               transform:rotate(14deg); filter:drop-shadow(0 2px 3px #0006); animation:promo 1.8s ease-in-out infinite; }
+  .new-badge i { position:absolute; inset:0; display:grid; place-items:center; background:#e11d2e; clip-path:polygon(50.0% 0.0%, 58.0% 9.8%, 69.1% 3.8%, 72.8% 15.9%, 85.4% 14.6%, 84.1% 27.2%, 96.2% 30.9%, 90.2% 42.0%, 100.0% 50.0%, 90.2% 58.0%, 96.2% 69.1%, 84.1% 72.8%, 85.4% 85.4%, 72.8% 84.1%, 69.1% 96.2%, 58.0% 90.2%, 50.0% 100.0%, 42.0% 90.2%, 30.9% 96.2%, 27.2% 84.1%, 14.6% 85.4%, 15.9% 72.8%, 3.8% 69.1%, 9.8% 58.0%, 0.0% 50.0%, 9.8% 42.0%, 3.8% 30.9%, 15.9% 27.2%, 14.6% 14.6%, 27.2% 15.9%, 30.9% 3.8%, 42.0% 9.8%);
+                 font-style:normal; font-weight:900; font-size:.68rem; letter-spacing:.02em; color:#ffe600;
+                 text-shadow:1px 1px 0 #7a0010; text-align:center; line-height:1; }
+  @keyframes promo { 0%, 100% { transform:rotate(14deg) scale(1); } 50% { transform:rotate(10deg) scale(1.1); } }
+  @media (prefers-reduced-motion: reduce) { .new-badge { animation:none; } }
+  .card .subj { display:flex; align-items:center; gap:.4rem; font-weight:700; font-size:.78rem; text-transform:uppercase; letter-spacing:.03em; }
+  .card .subj .si { display:grid; place-items:center; flex:none; width:1.7rem; height:1.7rem; border-radius:50%; background:#fff9; font-size:1rem; }
+  .card .txt { font-size:.92rem; margin:.2rem 0 .45rem; display:-webkit-box; -webkit-line-clamp:3; -webkit-box-orient:vertical; overflow:hidden; white-space:pre-wrap; }
+  .card .foot { display:flex; justify-content:space-between; align-items:center; font-size:.78rem; }
+  .card .due.late { color:var(--late); font-weight:700; }
+  .card .mv button { border:none; background:#0002; border-radius:3px; cursor:pointer; padding:.1rem .45rem; color:#222; }
+  .card .mv button:disabled { visibility:hidden; }
+  .card.is-done { opacity:.6; }
+  .card.is-done .txt { text-decoration:line-through; }
+  .empty { opacity:.45; font-size:.85rem; padding:.4rem; }
+  dialog { background:var(--panel); color:var(--fg); border:1px solid var(--line); border-radius:10px; max-width:34rem; width:calc(100% - 2rem); padding:0; overflow:hidden; }
+  dialog::backdrop { background:#0006; }
+  dialog .dhead { --h:50; color:#222; padding:1.6rem 1.2rem 1.2rem; background-color:hsl(var(--h) 60% 92%); background-size:cover; background-position:center; }
+  dialog .dhead.bg { background-image:var(--veil), var(--img); --veil:linear-gradient(90deg, rgba(255,255,255,.94) 0%, rgba(255,255,255,.88) 50%, rgba(255,255,255,.3) 78%, rgba(255,255,255,0) 100%); }
+  dialog .dhead > * { max-width:75%; }
+  /* fenêtre plus haute que l'écran : le bandeau reste fixe, le contenu défile, les boutons restent accessibles */
+  dialog[open] { display:flex; flex-direction:column; max-height:calc(100vh - 2rem); max-height:calc(100dvh - 2rem); }
+  dialog .dhead { flex:none; }
+  dialog .dbody { padding:1rem 1.2rem 0; overflow-y:auto; overscroll-behavior:contain; flex:1 1 auto; min-height:0; }
+  dialog .dbody > .actions:last-child { position:sticky; bottom:0; background:var(--panel); margin-top:.6rem; padding:.7rem 0 1.2rem; border-top:1px solid var(--line); }
+  #edit .dbody { padding-bottom:1.2rem; }
+  dialog .body { overflow-wrap:anywhere; }
+  dialog h3 { margin:0 0 .2rem; display:flex; align-items:center; gap:.5rem; font-size:1.25rem; }
+  dialog .meta { opacity:.75; font-size:.9rem; }
+  dialog .body { white-space:pre-wrap; }
+  dialog ul { padding-left:1.2rem; }
+  .btn { border:1px solid var(--line); background:var(--panel); color:var(--fg); border-radius:999px; padding:.4rem .9rem; cursor:pointer; font:inherit; font-size:.9rem; }
+  .btn.primary { background:var(--todo); border-color:var(--todo); color:#fff; font-weight:600; }
+  .col h2 .add { border:none; background:none; color:inherit; font-size:1.2rem; line-height:1; cursor:pointer; opacity:.5; padding:0 .2rem; }
+  .col h2 .add:hover { opacity:1; }
+  .tag { font-size:.62rem; font-weight:700; letter-spacing:.04em; text-transform:uppercase; padding:.05rem .4rem; border-radius:999px; background:#2229; color:#fff; }
+  #edit form label { display:block; font-size:.85rem; font-weight:600; margin:.8rem 0 .2rem; }
+  #edit input, #edit select, #edit textarea { width:100%; font:inherit; padding:.45rem .55rem; border:1px solid var(--line); border-radius:8px; background:var(--bg); color:var(--fg); }
+  #edit textarea { min-height:7rem; resize:vertical; }
+  #edit .row { display:grid; grid-template-columns:1fr 1fr; gap:.8rem; }
+  #edit h3 { margin:0; font-size:1.25rem; }
+  dialog .actions { display:flex; gap:.5rem; margin-top:1rem; justify-content:flex-end; }
+  .sync { font-size:.8rem; opacity:.7; margin-top:1.5rem; }
+  .sync.err { color: var(--late); opacity:1; }
+  .sync button { margin-left:.5rem; }
+  .toast { position:fixed; bottom:1rem; left:50%; transform:translateX(-50%); background:#333; color:#fff; padding:.5rem 1rem; border-radius:6px; display:none; }
+</style>
+</head>
+<body>
+<header>
+  <h1>Devoirs{% if child %} <small>— {{ child }}</small>{% endif %}</h1>
+  <div class="tools"><span class="alert" id="late"></span><button class="btn primary" id="add">➕ Nouvelle carte</button><button class="theme" id="theme" title="Changer de thème"></button></div>
+</header>
+
+<div class="board" id="board">
+  <section class="col" data-status="todo"><h2><span class="ico">📝</span>À faire <span class="n"></span><button class="add" data-add="todo" title="Ajouter une carte ici">+</button></h2><div class="cards"></div></section>
+  <section class="col" data-status="doing"><h2><span class="ico">🚀</span>En cours <span class="n"></span><button class="add" data-add="doing" title="Ajouter une carte ici">+</button></h2><div class="cards"></div></section>
+  <section class="col" data-status="done"><h2><span class="ico">✅</span>Terminé <span class="n"></span><button class="add" data-add="done" title="Ajouter une carte ici">+</button></h2><div class="cards"></div></section>
+</div>
+
+<dialog id="detail">
+  <div class="dhead" id="d-head">
+    <h3 id="d-subj"></h3>
+    <div class="meta" id="d-due"></div>
+  </div>
+  <div class="dbody">
+    <div class="body" id="d-body"></div>
+    <ul id="d-files"></ul>
+    <div class="actions" id="d-mine" hidden>
+      <button class="btn" id="d-edit">✏️ Modifier</button>
+      <button class="btn" id="d-del">🗑 Supprimer</button>
+    </div>
+    <div class="actions">
+      <button data-to="todo">À faire</button>
+      <button data-to="doing">En cours</button>
+      <button data-to="done">Terminé</button>
+      <button id="d-close">Fermer</button>
+    </div>
+  </div>
+</dialog>
+
+<dialog id="edit">
+  <div class="dbody">
+    <h3 id="edit-title"></h3>
+    <form id="edit-form">
+      <label for="f-subject">Matière / catégorie</label>
+      <input id="f-subject" name="subject" list="subjects" maxlength="60" placeholder="Perso" autocomplete="off">
+      <datalist id="subjects"></datalist>
+      <label for="f-desc">Description</label>
+      <textarea id="f-desc" name="description" required maxlength="2000"></textarea>
+      <div class="row">
+        <div><label for="f-due">Pour le</label><input id="f-due" name="due_date" type="date" required></div>
+        <div><label for="f-status">Colonne</label>
+          <select id="f-status" name="status"><option value="todo">À faire</option><option value="doing">En cours</option><option value="done">Terminé</option></select></div>
+      </div>
+      <div class="actions"><button type="button" class="btn" id="edit-cancel">Annuler</button><button type="submit" class="btn primary">Enregistrer</button></div>
+    </form>
+  </div>
+</dialog>
+
+<div class="sync {{ 'err' if last and not last.ok }}">
+  {% if last %}Dernière synchro ({{ last.at }} UTC) : {{ last.message }}{% else %}Pas encore de synchro.{% endif %}
+  <form method="post" action="/sync" style="display:inline"><button>Synchroniser maintenant</button></form>
+  {% if not push %}<br>Mode lecture : les changements de colonne restent dans l'app et ne sont pas envoyés à Pronote.{% endif %}
+</div>
+<div class="toast" id="toast"></div>
+
+<script>
+const CARDS = {{ cards|tojson }};
+const TODAY = {{ today|tojson }};
+const FONDS = new Set({{ fonds|tojson }});   // illustrations réellement présentes dans app/static/fonds
+// « Terminé » : on masque (sans rien supprimer) les devoirs dont l'échéance a plus de KEEP_DAYS jours
+const KEEP_DAYS = {{ keep_days }};
+const CUTOFF = (() => { const d = new Date(TODAY + "T12:00:00"); d.setDate(d.getDate() - KEEP_DAYS); return d.toLocaleDateString("sv-SE"); })();
+const hidden = c => c.status === "done" && c.due_date < CUTOFF;
+const ORDER = ["todo", "doing", "done"];
+const byId = Object.fromEntries(CARDS.map(c => [c.id, c]));
+const fmt = new Intl.DateTimeFormat("fr-FR", { weekday: "short", day: "numeric", month: "short" });
+const nice = d => fmt.format(new Date(d + "T12:00:00"));
+const hue = s => { let h = 0; for (const ch of s) h = (h * 31 + ch.charCodeAt(0)) % 360; return h; };
+const $ = (s, r = document) => r.querySelector(s);
+
+const ICONS = [  // mots-clés (sans accents, minuscules) -> icône ; le premier qui correspond gagne
+  ["scientifique", "🔬"], ["physique", "⚗️"], ["chimie", "⚗️"], ["math", "📐"], ["svt", "🌱"], ["vie et de la terre", "🌱"],
+  ["histoire", "🏛️"], ["geo", "🌍"], ["emc", "🗳️"], ["civique", "🗳️"], ["anglais", "🇬🇧"], ["espagnol", "🇪🇸"],
+  ["allemand", "🇩🇪"], ["italien", "🇮🇹"], ["chinois", "🇨🇳"], ["latin", "📜"], ["grec", "📜"], ["franc", "📖"], ["lettres", "📖"],
+  ["philo", "🤔"], ["ses", "📈"], ["economi", "📈"], ["nsi", "💻"], ["numerique", "💻"], ["informatique", "💻"], ["snt", "💻"],
+  ["techno", "🛠️"], ["sport", "🏃"], ["eps", "🏃"], ["plastique", "🎨"], ["art", "🎨"], ["musi", "🎵"], ["vie scolaire", "🏫"],
+];
+const strip = s => s.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
+const icon = subj => { const k = strip(subj); const m = ICONS.find(([w]) => k.includes(w)); return m ? m[1] : "📚"; };
+
+const BGS = [  // mots-clés -> image de fond (app/static/fonds/<nom>.jpg)
+  ["scientifique", "enseignement-scientifique"], ["physique", "physique-chimie"], ["chimie", "physique-chimie"],
+  ["svt", "svt"], ["vie et de la terre", "svt"],
+  ["math", "maths"], ["histoire", "histoire-geo"], ["geo", "histoire-geo"], ["anglais", "anglais"], ["italien", "italien"],
+];
+const bgOf = subj => { const k = strip(subj); const m = BGS.find(([w, f]) => k.includes(w) && FONDS.has(f)); return m ? m[1] : null; };
+
+function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; }
+
+function render() {
+  for (const col of document.querySelectorAll(".col")) {
+    const st = col.dataset.status, box = $(".cards", col);
+    box.replaceChildren();
+    const items = CARDS.filter(c => c.status === st && !hidden(c))
+      .sort((a, b) => a.due_date.localeCompare(b.due_date) || a.subject.localeCompare(b.subject, "fr"));
+    $(".n", col).textContent = items.length;
+    if (!items.length) box.append(el("div", "empty", "—"));
+    for (const c of items) box.append(card(c));
+    const old = st === "done" ? CARDS.filter(hidden).length : 0;
+    if (old) box.append(el("div", "empty", `${old} terminé(s) de plus de ${KEEP_DAYS} jours masqué(s)`));
+  }
+  const late = CARDS.filter(c => c.status !== "done" && c.due_date < TODAY).length;
+  $("#late").textContent = late ? `⚠ ${late} devoir(s) en retard` : "";
+}
+
+function card(c) {
+  const e = el("div", "card" + (c.status === "done" ? " is-done" : ""));
+  e.draggable = true; e.dataset.id = c.id; e.style.setProperty("--h", hue(c.subject));
+  const bg = bgOf(c.subject);
+  if (bg) { e.classList.add("bg"); e.style.backgroundImage = `var(--veil), url(/static/fonds/${bg}.jpg)`; }
+  const subj = el("div", "subj"); subj.append(el("span", "si", icon(c.subject)), el("span", null, c.subject));
+  if (c.source === "local") subj.append(el("span", "tag", "perso"));
+  const panel = el("div", "panel");
+  panel.append(subj, el("div", "txt", c.description));
+  e.append(panel);
+  const foot = el("div", "foot");
+  const late = c.status !== "done" && c.due_date < TODAY;
+  foot.append(el("span", "due" + (late ? " late" : ""), (late ? "⚠ " : "pour le ") + nice(c.due_date)));
+  const mv = el("span", "mv"), i = ORDER.indexOf(c.status);
+  const l = el("button", null, "◀"), r = el("button", null, "▶");
+  l.disabled = i === 0; r.disabled = i === 2;
+  l.title = "Colonne précédente"; r.title = "Colonne suivante";
+  l.onclick = ev => { ev.stopPropagation(); move(c.id, ORDER[i - 1]); };
+  r.onclick = ev => { ev.stopPropagation(); move(c.id, ORDER[i + 1]); };
+  mv.append(l, " ", r); foot.append(mv); panel.append(foot);
+  if (c.is_new && c.status !== "done") { const b = el("span", "new-badge"); b.title = "Apparu récemment"; b.append(el("i", null, "NOUVEAU")); e.append(b); }
+  e.ondblclick = () => openDetail(c);
+  e.ondragstart = ev => { ev.dataTransfer.setData("text/plain", c.id); e.classList.add("dragging"); };
+  e.ondragend = () => e.classList.remove("dragging");
+  return e;
+}
+
+async function move(id, status) {
+  const c = byId[id]; if (!c || c.status === status) return;
+  const prev = c.status; c.status = status; render();       // affichage immédiat
+  try {
+    const r = await fetch(`/move/${encodeURIComponent(id)}`, {
+      method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ status }) });
+    if (!r.ok) throw new Error(r.status);
+  } catch (e) { c.status = prev; render(); toast("Déplacement impossible, réessayez"); }
+}
+
+for (const col of document.querySelectorAll(".col")) {
+  col.ondragover = ev => { ev.preventDefault(); col.classList.add("over"); };
+  col.ondragleave = ev => { if (!col.contains(ev.relatedTarget)) col.classList.remove("over"); };
+  col.ondrop = ev => { ev.preventDefault(); col.classList.remove("over"); move(ev.dataTransfer.getData("text/plain"), col.dataset.status); };
+}
+
+const dlg = $("#detail"); let current = null;
+function openDetail(c) {
+  current = c;
+  $("#d-subj").textContent = icon(c.subject) + " " + c.subject;
+  const head = $("#d-head"), bg = bgOf(c.subject);
+  head.style.setProperty("--h", hue(c.subject));
+  head.classList.toggle("bg", !!bg);
+  head.style.setProperty("--img", bg ? `url(/static/fonds/${bg}.jpg)` : "none");
+  $("#d-due").textContent = "Pour le " + nice(c.due_date) + (c.status !== "done" && c.due_date < TODAY ? " — en retard" : "");
+  $("#d-body").textContent = c.description;
+  const ul = $("#d-files"); ul.replaceChildren();
+  c.files.forEach((f, i) => {
+    const li = el("li");
+    const href = f.kind === "link" ? f.url : (f.local ? `/file/${encodeURIComponent(c.id)}/${i}` : null);
+    if (href && (f.kind !== "link" || /^https?:\/\//.test(href))) {
+      const a = el("a", null, (f.kind === "link" ? "🔗 " : "📎 ") + f.name); a.href = href; a.target = "_blank"; a.rel = "noopener"; li.append(a);
+    } else li.textContent = "📎 " + f.name + " (indisponible : pas encore téléchargé)";
+    ul.append(li);
+  });
+  for (const b of dlg.querySelectorAll("[data-to]")) b.disabled = b.dataset.to === c.status;
+  $("#d-mine").hidden = c.source !== "local";
+  dlg.showModal();
+}
+for (const b of dlg.querySelectorAll("[data-to]")) b.onclick = () => { move(current.id, b.dataset.to); dlg.close(); };
+$("#d-close").onclick = () => dlg.close();
+dlg.onclick = ev => { if (ev.target === dlg) dlg.close(); };
+
+// --- cartes personnelles : création, modification, suppression ---
+// matières proposées d'office (en plus de celles déjà présentes dans les devoirs)
+const SUBJECTS = ["Allemand", "Anglais", "Arts plastiques", "EMC", "Enseignement scientifique", "EPS", "Espagnol", "Français",
+  "Géographie", "Histoire", "Histoire-Géographie", "Italien", "Latin", "Mathématiques", "Musique", "NSI", "Philosophie",
+  "Physique-Chimie", "SES", "SNT", "SVT", "Technologie", "Perso"];
+const ed = $("#edit"), form = $("#edit-form"); let editing = null;
+const JSON_HDR = { "Content-Type": "application/json" };
+function openEdit(c, status = "todo") {
+  editing = c;
+  $("#edit-title").textContent = c ? "Modifier la carte" : "Nouvelle carte";
+  form.subject.value = c ? c.subject : "";
+  form.description.value = c ? c.description : "";
+  form.due_date.value = c ? c.due_date : new Date(Date.now() + 864e5).toLocaleDateString("sv-SE");
+  form.status.value = c ? c.status : status;
+  const known = [...new Set([...SUBJECTS, ...CARDS.map(x => x.subject)])].sort((x, y) => x.localeCompare(y, "fr"));
+  $("#subjects").replaceChildren(...known.map(v => { const o = el("option"); o.value = v; return o; }));
+  ed.showModal(); form.description.focus();
+}
+form.onsubmit = async ev => {
+  ev.preventDefault();
+  const body = { subject: form.subject.value.trim() || "Perso", description: form.description.value.trim(),
+                 due_date: form.due_date.value, status: form.status.value };
+  if (!body.description || !body.due_date) return;
+  try {
+    const r = await fetch(editing ? `/api/cards/${encodeURIComponent(editing.id)}` : "/api/cards",
+      { method: editing ? "PUT" : "POST", headers: JSON_HDR, body: JSON.stringify(body) });
+    if (!r.ok) throw new Error(r.status);
+    const card = await r.json();
+    if (editing) Object.assign(editing, card); else { CARDS.push(card); byId[card.id] = card; }
+    ed.close(); render();
+  } catch (e) { toast("Enregistrement impossible, réessayez"); }
+};
+$("#edit-cancel").onclick = () => ed.close();
+ed.onclick = ev => { if (ev.target === ed) ed.close(); };
+$("#add").onclick = () => openEdit(null);
+for (const b of document.querySelectorAll("[data-add]")) b.onclick = () => openEdit(null, b.dataset.add);
+$("#d-edit").onclick = () => { dlg.close(); openEdit(current); };
+$("#d-del").onclick = async () => {
+  if (!confirm("Supprimer cette carte ?")) return;
+  try {
+    const r = await fetch(`/api/cards/${encodeURIComponent(current.id)}`, { method: "DELETE" });
+    if (!r.ok) throw new Error(r.status);
+    CARDS.splice(CARDS.indexOf(current), 1); delete byId[current.id];
+    dlg.close(); render();
+  } catch (e) { toast("Suppression impossible, réessayez"); }
+};
+
+let tt; function toast(m) { const t = $("#toast"); t.textContent = m; t.style.display = "block"; clearTimeout(tt); tt = setTimeout(() => t.style.display = "none", 3000); }
+
+// thème : auto (système) -> clair -> sombre ; le choix est mémorisé dans ce navigateur
+const THEMES = [["auto", "🖥️"], ["light", "☀️"], ["dark", "🌙"]];
+let theme = "auto";
+try { theme = localStorage.getItem("theme") || "auto"; } catch (e) {}
+function applyTheme() {
+  const root = document.documentElement;
+  if (theme === "auto") root.removeAttribute("data-theme"); else root.setAttribute("data-theme", theme);
+  $("#theme").textContent = THEMES.find(t => t[0] === theme)[1];
+  $("#theme").title = "Thème : " + ({ auto: "automatique", light: "clair", dark: "sombre" })[theme];
+}
+$("#theme").onclick = () => {
+  theme = THEMES[(THEMES.findIndex(t => t[0] === theme) + 1) % 3][0];
+  try { localStorage.setItem("theme", theme); } catch (e) {}
+  applyTheme();
+};
+applyTheme();
+render();
+</script>
+</body>
+</html>
