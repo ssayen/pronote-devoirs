@@ -3,7 +3,7 @@ services:
     build: .
     restart: unless-stopped
     ports:
-      - "8000:8000"
+      - "127.0.0.1:8000:8000"   # joignable uniquement par le reverse proxy (Caddy) sur l'hôte
     volumes:
       - ./data:/data          # base SQLite + fichiers + credentials.json (persistant, à sauvegarder)
     environment:
