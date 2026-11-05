@@ -5,9 +5,13 @@ services:
     ports:
       - "8000:8000"
     volumes:
-      - ./data:/data          # base SQLite + credentials.json (persistant)
+      - ./data:/data          # base SQLite + fichiers + credentials.json (persistant, à sauvegarder)
     environment:
-      SYNC_INTERVAL_MIN: "30"   # 0 = pas de synchro automatique
-      APP_USER: "admin"
-      APP_PASSWORD: "change-me" # vide = pas d'authentification
-      CHILD_NAME: ""            # compte parent : prénom de l'enfant (optionnel si un seul)
+      # les valeurs viennent du fichier .env (non versionné) : voir .env.example
+      APP_USER: "${APP_USER:-admin}"
+      APP_PASSWORD: "${APP_PASSWORD:?définir APP_PASSWORD dans .env}"
+      CHILD_NAME: "${CHILD_NAME:-}"          # compte parent : nom exact de l'enfant dans Pronote
+      SYNC_INTERVAL_MIN: "${SYNC_INTERVAL_MIN:-30}"   # 0 = pas de synchro automatique ; ne pas descendre sous 15
+      PUSH_TO_PRONOTE: "${PUSH_TO_PRONOTE:-0}"        # 1 = renvoyer « terminé » vers Pronote (non testé en réel)
+      NEW_HOURS: "${NEW_HOURS:-48}"                   # durée du badge « Nouveau »
+      DONE_KEEP_DAYS: "${DONE_KEEP_DAYS:-3}"          # « Terminé » masqué au-delà de N jours après l'échéance
