@@ -166,18 +166,18 @@ const hue = s => { let h = 0; for (const ch of s) h = (h * 31 + ch.charCodeAt(0)
 const $ = (s, r = document) => r.querySelector(s);
 
 const ICONS = [  // mots-clés (sans accents, minuscules) -> icône ; le premier qui correspond gagne
-  ["scientifique", "🔬"], ["physique", "⚗️"], ["chimie", "⚗️"], ["math", "📐"], ["svt", "🌱"], ["vie et de la terre", "🌱"],
+  ["scientifique", "🔬"], ["physique", "⚗️"], ["chimie", "⚗️"], ["math", "📐"], ["svt", "🌱"], ["vie et de la terre", "🌱"], ["vie et terre", "🌱"],
   ["histoire", "🏛️"], ["geo", "🌍"], ["emc", "🗳️"], ["civique", "🗳️"], ["anglais", "🇬🇧"], ["espagnol", "🇪🇸"],
   ["allemand", "🇩🇪"], ["italien", "🇮🇹"], ["chinois", "🇨🇳"], ["latin", "📜"], ["grec", "📜"], ["franc", "📖"], ["lettres", "📖"],
   ["philo", "🤔"], ["ses", "📈"], ["economi", "📈"], ["nsi", "💻"], ["numerique", "💻"], ["informatique", "💻"], ["snt", "💻"],
   ["techno", "🛠️"], ["sport", "🏃"], ["eps", "🏃"], ["plastique", "🎨"], ["art", "🎨"], ["musi", "🎵"], ["vie scolaire", "🏫"],
 ];
-const strip = s => s.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
+const strip = s => s.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().replace(/&/g, " et ").replace(/\s+/g, " ");
 const icon = subj => { const k = strip(subj); const m = ICONS.find(([w]) => k.includes(w)); return m ? m[1] : "📚"; };
 
 const BGS = [  // mots-clés -> image de fond (app/static/fonds/<nom>.jpg)
   ["scientifique", "enseignement-scientifique"], ["physique", "physique-chimie"], ["chimie", "physique-chimie"],
-  ["svt", "svt"], ["vie et de la terre", "svt"],
+  ["svt", "svt"], ["vie et de la terre", "svt"], ["vie et terre", "svt"],
   ["math", "maths"], ["histoire", "histoire-geo"], ["geo", "histoire-geo"], ["anglais", "anglais"], ["italien", "italien"],
 ];
 const bgOf = subj => { const k = strip(subj); const m = BGS.find(([w, f]) => k.includes(w) && FONDS.has(f)); return m ? m[1] : null; };
@@ -274,7 +274,7 @@ dlg.onclick = ev => { if (ev.target === dlg) dlg.close(); };
 // matières proposées d'office (en plus de celles déjà présentes dans les devoirs)
 const SUBJECTS = ["Allemand", "Anglais", "Arts plastiques", "EMC", "Enseignement scientifique", "EPS", "Espagnol", "Français",
   "Géographie", "Histoire", "Histoire-Géographie", "Italien", "Latin", "Mathématiques", "Musique", "NSI", "Philosophie",
-  "Physique-Chimie", "SES", "SNT", "SVT", "Technologie", "Perso"];
+  "Physique-Chimie", "Sciences Vie & Terre", "SES", "SNT", "Technologie", "Perso"];
 const ed = $("#edit"), form = $("#edit-form"); let editing = null;
 const JSON_HDR = { "Content-Type": "application/json" };
 function openEdit(c, status = "todo") {
