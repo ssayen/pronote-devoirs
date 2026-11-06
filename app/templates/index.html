@@ -172,7 +172,9 @@ const ICONS = [  // mots-clés (sans accents, minuscules) -> icône ; le premier
   ["philo", "🤔"], ["ses", "📈"], ["economi", "📈"], ["nsi", "💻"], ["numerique", "💻"], ["informatique", "💻"], ["snt", "💻"],
   ["techno", "🛠️"], ["sport", "🏃"], ["eps", "🏃"], ["plastique", "🎨"], ["art", "🎨"], ["musi", "🎵"], ["vie scolaire", "🏫"],
 ];
-const strip = s => s.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().replace(/&/g, " et ").replace(/\s+/g, " ");
+// nom de matière normalisé pour la correspondance : sans accents, « & » (ou « &amp; ») lu comme « et », ponctuation et espaces (même insécables) ramenés à un espace
+const strip = s => " " + s.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase()
+  .replace(/&(amp;|#38;|#x26;)?/g, " et ").replace(/[^a-z0-9]+/g, " ") + " ";
 const icon = subj => { const k = strip(subj); const m = ICONS.find(([w]) => k.includes(w)); return m ? m[1] : "📚"; };
 
 const BGS = [  // mots-clés -> image de fond (app/static/fonds/<nom>.jpg)
