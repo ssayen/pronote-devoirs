@@ -88,6 +88,17 @@
   .sync { font-size:.8rem; opacity:.7; margin-top:1.5rem; }
   .sync.err { color: var(--late); opacity:1; }
   .sync button { margin-left:.5rem; }
+  .banner { background:#b3261e; color:#fff; border-radius:10px; padding:.8rem 1rem; margin-bottom:1rem; box-shadow:0 2px 6px var(--shadow); }
+  .banner strong { display:block; font-size:1.05rem; margin-bottom:.3rem; }
+  .banner code { display:block; margin-top:.4rem; padding:.4rem .6rem; background:#0004; border-radius:6px; font-size:.82rem; overflow-x:auto; white-space:nowrap; user-select:all; }
+  .banner .btn { margin-top:.6rem; background:#fff; color:#b3261e; border-color:#fff; font-weight:700; }
+  .drop { border:2px dashed var(--line); border-radius:12px; padding:1.4rem 1rem; text-align:center; cursor:pointer; margin:.8rem 0; opacity:.85; }
+  .drop.over, .drop:focus { border-color:var(--todo); background:color-mix(in srgb, var(--todo) 10%, transparent); outline:none; }
+  #qr-preview { display:block; max-width:9rem; max-height:9rem; margin:0 auto .8rem; border-radius:8px; border:1px solid var(--line); }
+  #reconnect input[type=text] { width:8rem; font:inherit; font-size:1.3rem; letter-spacing:.4em; text-align:center; padding:.4rem; border:1px solid var(--line); border-radius:8px; background:var(--bg); color:var(--fg); }
+  #reconnect .hint { font-size:.88rem; opacity:.8; margin:.4rem 0 0; }
+  #qr-msg { min-height:1.3rem; font-size:.9rem; margin:.6rem 0 0; }
+  #qr-msg.err { color:var(--late); } #qr-msg.ok { color:var(--done); font-weight:600; }
   .toast { position:fixed; bottom:1rem; left:50%; transform:translateX(-50%); background:#333; color:#fff; padding:.5rem 1rem; border-radius:6px; display:none; }
 </style>
 </head>
@@ -97,6 +108,13 @@
   <div class="tools"><span class="alert" id="late"></span><button class="btn primary" id="add">➕ Nouvelle carte</button><button class="theme" id="theme" title="Changer de thème"></button></div>
 </header>
 
+{% if auth_problem %}
+<div class="banner" role="alert">
+  <strong>🔑 Pronote a refusé la connexion : les devoirs ne sont plus mis à jour</strong>
+  Les cartes affichées datent de la dernière synchro réussie. Pour reconnecter : générer un nouveau QR code d'application mobile dans Pronote (avec un PIN à 4 chiffres), en faire une capture d'écran, puis la déposer ici.
+  <button class="btn" data-reconnect>🔑 Reconnecter Pronote</button>
+</div>
+{% endif %}
 <div class="board" id="board">
   <section class="col" data-status="todo"><h2><span class="ico">📝</span>À faire <span class="n"></span><button class="add" data-add="todo" title="Ajouter une carte ici">+</button></h2><div class="cards"></div></section>
   <section class="col" data-status="doing"><h2><span class="ico">🚀</span>En cours <span class="n"></span><button class="add" data-add="doing" title="Ajouter une carte ici">+</button></h2><div class="cards"></div></section>
@@ -143,9 +161,25 @@
   </div>
 </dialog>
 
+<dialog id="reconnect">
+  <div class="dbody">
+    <h3>🔑 Reconnecter Pronote</h3>
+    <p class="hint">Dans Pronote, générer un QR code d'application mobile et choisir un PIN à 4 chiffres. Faire une capture d'écran du QR code, puis la déposer ci-dessous.
+      Le QR code expire vite : enchaîner sans attendre.</p>
+    <div class="drop" id="drop" tabindex="0">Déposer la capture ici, cliquer pour la choisir, ou la coller (Ctrl/⌘ + V)</div>
+    <input type="file" id="qr-file" accept="image/*" hidden>
+    <img id="qr-preview" alt="Aperçu de la capture" hidden>
+    <label for="qr-pin" style="display:block;font-weight:600;margin-bottom:.3rem">PIN (4 chiffres)</label>
+    <input type="text" id="qr-pin" inputmode="numeric" maxlength="4" autocomplete="off" placeholder="••••">
+    <p id="qr-msg" role="status"></p>
+    <div class="actions"><button type="button" class="btn" id="qr-cancel">Annuler</button><button type="button" class="btn primary" id="qr-go">Connecter</button></div>
+  </div>
+</dialog>
+
 <div class="sync {{ 'err' if last and not last.ok }}">
   {% if last %}Dernière synchro ({{ last.at }} UTC) : {{ last.message }}{% else %}Pas encore de synchro.{% endif %}
   <form method="post" action="/sync" style="display:inline"><button>Synchroniser maintenant</button></form>
+  <button type="button" data-reconnect>🔑 Reconnecter Pronote</button>
   {% if not push %}<br>Mode lecture : les changements de colonne restent dans l'app et ne sont pas envoyés à Pronote.{% endif %}
 </div>
 <div class="toast" id="toast"></div>
@@ -317,6 +351,41 @@ $("#d-del").onclick = async () => {
     CARDS.splice(CARDS.indexOf(current), 1); delete byId[current.id];
     dlg.close(); render();
   } catch (e) { toast("Suppression impossible, réessayez"); }
+};
+
+// --- reconnexion à Pronote : dépôt de la capture du QR code ---
+const rc = $("#reconnect"), drop = $("#drop"), qrFile = $("#qr-file"), qrPin = $("#qr-pin"), qrMsg = $("#qr-msg"), qrPrev = $("#qr-preview");
+let qrImage = null;
+const qrSay = (m, cls = "") => { qrMsg.textContent = m; qrMsg.className = cls; };
+function qrSet(f) {
+  if (!f || !f.type.startsWith("image/")) return qrSay("Ce n'est pas une image : déposer une capture d'écran du QR code.", "err");
+  qrImage = f; qrSay(""); URL.revokeObjectURL(qrPrev.src); qrPrev.src = URL.createObjectURL(f); qrPrev.hidden = false; qrPin.focus();
+}
+for (const b of document.querySelectorAll("[data-reconnect]")) b.onclick = () => {
+  qrImage = null; qrPrev.hidden = true; qrPin.value = ""; qrSay(""); $("#qr-go").disabled = false; rc.showModal();
+};
+drop.onclick = () => qrFile.click();
+drop.onkeydown = ev => { if (ev.key === "Enter" || ev.key === " ") { ev.preventDefault(); qrFile.click(); } };
+qrFile.onchange = () => qrSet(qrFile.files[0]);
+drop.ondragover = ev => { ev.preventDefault(); drop.classList.add("over"); };
+drop.ondragleave = () => drop.classList.remove("over");
+drop.ondrop = ev => { ev.preventDefault(); drop.classList.remove("over"); qrSet(ev.dataTransfer.files[0]); };
+document.addEventListener("paste", ev => { if (rc.open) { const f = [...(ev.clipboardData?.files || [])].find(x => x.type.startsWith("image/")); if (f) qrSet(f); } });
+qrPin.oninput = () => { qrPin.value = qrPin.value.replace(/\D/g, ""); };
+qrPin.onkeydown = ev => { if (ev.key === "Enter") $("#qr-go").click(); };
+$("#qr-cancel").onclick = () => rc.close();
+$("#qr-go").onclick = async () => {
+  if (!qrImage) return qrSay("Déposer d'abord la capture du QR code.", "err");
+  if (!/^\d{4}$/.test(qrPin.value)) return qrSay("Le PIN comporte 4 chiffres.", "err");
+  const go = $("#qr-go"); go.disabled = true; qrSay("Connexion à Pronote…");
+  try {
+    const image = await new Promise((ok, ko) => { const r = new FileReader(); r.onload = () => ok(r.result); r.onerror = ko; r.readAsDataURL(qrImage); });
+    const r = await fetch("/api/reconnect", { method: "POST", headers: JSON_HDR, body: JSON.stringify({ image, pin: qrPin.value }) });
+    const j = await r.json().catch(() => ({}));
+    if (!r.ok) throw new Error(typeof j.detail === "string" ? j.detail : "Erreur " + r.status);
+    qrSay(`Connecté (${j.name}). Synchronisation en cours…`, "ok");
+    setTimeout(() => location.reload(), 4000);
+  } catch (e) { qrSay(e.message, "err"); go.disabled = false; qrPin.value = ""; }
 };
 
 let tt; function toast(m) { const t = $("#toast"); t.textContent = m; t.style.display = "block"; clearTimeout(tt); tt = setTimeout(() => t.style.display = "none", 3000); }

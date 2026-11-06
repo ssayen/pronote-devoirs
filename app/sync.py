@@ -2,6 +2,7 @@ import hashlib
 import json
 import os
 import threading
+import urllib.request
 from datetime import date, timedelta
 
 import pronotepy
@@ -33,13 +34,20 @@ def client_class(url: str):
     return pronotepy.Client
 
 
+class TokenExpired(RuntimeError):
+    """Pronote refuse le jeton (ou il n'existe pas) : il faut régénérer un QR code."""
+
+
 def get_client():
     """Point d'injection (remplaçable dans les tests)."""
-    with open(creds_path()) as f:
-        creds = json.load(f)
+    try:
+        with open(creds_path()) as f:
+            creds = json.load(f)
+    except FileNotFoundError:
+        raise TokenExpired("Aucun identifiant Pronote (credentials.json absent) : faire la connexion par QR code") from None
     client = client_class(creds["pronote_url"]).token_login(**creds)
     if not client.logged_in:
-        raise RuntimeError("Connexion refusée : jeton expiré, régénérer le QR code")
+        raise TokenExpired("Connexion refusée : jeton expiré, régénérer le QR code")
     save_creds(client)
     child = os.environ.get("CHILD_NAME")
     if child:
@@ -155,16 +163,48 @@ def _sync() -> str:
     return f"{len(hws)} devoirs lus, {pulled} nouveaux, {pushed} statuts renvoyés vers Pronote"
 
 
+def notify(title: str, message: str) -> str | None:
+    """Notification poussée (compatible ntfy) vers NOTIFY_URL ; désactivée si elle est vide.
+    Ne transmet jamais de données de devoirs. Retourne un message d'erreur, ou None."""
+    url = os.environ.get("NOTIFY_URL", "").strip()
+    if not url:
+        return None
+    headers = {"Title": title, "Priority": "high", "Tags": "key", "Content-Type": "text/plain; charset=utf-8"}
+    if os.environ.get("NOTIFY_TOKEN"):
+        headers["Authorization"] = "Bearer " + os.environ["NOTIFY_TOKEN"]
+    try:
+        req = urllib.request.Request(url, data=message.encode("utf-8"), headers=headers, method="POST")
+        urllib.request.urlopen(req, timeout=10).close()
+    except Exception as e:  # noqa: BLE001 - une notification ratée ne doit jamais bloquer la synchro
+        return f"{type(e).__name__}: {e}"
+    return None
+
+
 def run_sync() -> None:
     if not LOCK.acquire(blocking=False):
         return  # synchro déjà en cours
     try:
         try:
-            ok, msg = True, _sync()
+            kind, msg = "ok", _sync()
+        except TokenExpired as e:
+            kind, msg = "auth", str(e)
         except Exception as e:  # noqa: BLE001
-            ok, msg = False, f"{type(e).__name__}: {e}"
+            kind, msg = "error", f"{type(e).__name__}: {e}"
         with db.conn() as c:
-            c.execute("INSERT INTO sync_log (ok, message) VALUES (?, ?)", (int(ok), msg))
+            prev = c.execute("SELECT kind FROM sync_log ORDER BY id DESC LIMIT 1").fetchone()
+        prev_kind = prev["kind"] if prev else "ok"
+        # une seule notification par changement d'état (pas une toutes les 30 min)
+        failure = None
+        if kind == "auth" and prev_kind != "auth":
+            failure = notify("Devoirs Pronote : jeton expire",
+                             "Pronote a refuse le jeton : les devoirs ne sont plus synchronises. "
+                             "Regenerer un QR code et relancer la connexion (voir le bandeau rouge de l'application).")
+        elif kind == "ok" and prev_kind == "auth":
+            failure = notify("Devoirs Pronote : reconnecte", "La synchronisation avec Pronote fonctionne de nouveau.")
+        if failure:
+            msg += f" (notification non envoyée : {failure})"
+        with db.conn() as c:
+            c.execute("INSERT INTO sync_log (ok, kind, message) VALUES (?, ?, ?)", (int(kind == "ok"), kind, msg))
             c.execute("DELETE FROM sync_log WHERE id NOT IN (SELECT id FROM sync_log ORDER BY id DESC LIMIT 200)")
     finally:
         LOCK.release()

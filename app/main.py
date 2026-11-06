@@ -1,4 +1,6 @@
 import asyncio
+import base64
+import binascii
 import json
 import os
 import uuid
@@ -14,7 +16,7 @@ from fastapi.security import HTTPBasic, HTTPBasicCredentials
 from fastapi.templating import Jinja2Templates
 from pydantic import BaseModel, Field
 
-from . import db, sync
+from . import db, qr as qrlogin, sync
 
 INTERVAL_MIN = int(os.environ.get("SYNC_INTERVAL_MIN", "30"))
 APP_USER = os.environ.get("APP_USER", "admin")
@@ -82,7 +84,7 @@ def index(request: Request):
         "index.html",
         {"cards": cards, "last": last, "today": date.today().isoformat(),
          "child": os.environ.get("CHILD_NAME", ""), "push": sync.push_enabled(),
-         "keep_days": DONE_KEEP_DAYS,
+         "keep_days": DONE_KEEP_DAYS, "auth_problem": bool(last and last["kind"] == "auth"),
          "fonds": sorted(p.stem for p in (Path(__file__).parent / "static" / "fonds").glob("*.jpg"))},
     )
 
@@ -177,6 +179,32 @@ def attachment(hw_id: str, idx: int):
     if not path.startswith(root + os.sep) or not os.path.isfile(path):
         raise HTTPException(404)
     return FileResponse(path, filename=files[idx]["name"])
+
+
+class Reconnect(BaseModel):
+    image: str = Field(max_length=12_000_000)   # capture du QR code en base64 (préfixe « data:… » toléré)
+    pin: str = Field(max_length=10)
+
+
+@app.post("/api/reconnect")
+def reconnect(body: Reconnect, background: BackgroundTasks):
+    """Reconnexion à Pronote depuis une capture du QR code + son PIN. Rien n'est conservé hors credentials.json."""
+    if os.environ.get("ALLOW_RECONNECT", "1") != "1":
+        raise HTTPException(403, "Reconnexion désactivée dans cet environnement (ALLOW_RECONNECT=0).")
+    try:
+        data = base64.b64decode(body.image.split(",", 1)[-1], validate=True)
+    except (binascii.Error, ValueError):
+        raise HTTPException(400, "Image illisible.") from None
+    if not sync.LOCK.acquire(timeout=30):  # ne pas réécrire credentials.json pendant une synchro
+        raise HTTPException(409, "Une synchronisation est en cours, réessayer dans un instant.")
+    try:
+        name = qrlogin.connect(qrlogin.decode_image(data), body.pin)
+    except qrlogin.QRError as e:
+        raise HTTPException(400, str(e)) from None
+    finally:
+        sync.LOCK.release()
+    background.add_task(sync.run_sync)  # première synchro tout de suite : lève la bannière et notifie « reconnecté »
+    return {"ok": True, "name": name}
 
 
 @app.post("/sync")

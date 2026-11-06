@@ -13,5 +13,7 @@ services:
       CHILD_NAME: "${CHILD_NAME:-}"          # compte parent : nom exact de l'enfant dans Pronote
       SYNC_INTERVAL_MIN: "${SYNC_INTERVAL_MIN:-30}"   # 0 = pas de synchro automatique ; ne pas descendre sous 15
       PUSH_TO_PRONOTE: "${PUSH_TO_PRONOTE:-0}"        # 1 = renvoyer « terminé » vers Pronote (non testé en réel)
+      NOTIFY_URL: "${NOTIFY_URL:-}"                   # notification si le jeton Pronote est refusé (ex. https://ntfy.sh/mon-topic-secret)
+      NOTIFY_TOKEN: "${NOTIFY_TOKEN:-}"               # jeton d'accès ntfy (optionnel)
       NEW_HOURS: "${NEW_HOURS:-48}"                   # durée du badge « Nouveau »
       DONE_KEEP_DAYS: "${DONE_KEEP_DAYS:-3}"          # « Terminé » masqué au-delà de N jours après l'échéance

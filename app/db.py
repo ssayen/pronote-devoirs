@@ -25,6 +25,7 @@ CREATE TABLE IF NOT EXISTS sync_log (
     id      INTEGER PRIMARY KEY AUTOINCREMENT,
     at      TEXT NOT NULL DEFAULT (datetime('now')),
     ok      INTEGER NOT NULL,
+    kind    TEXT NOT NULL DEFAULT 'ok',   -- ok | error | auth (jeton Pronote refusé)
     message TEXT NOT NULL
 );
 """
@@ -68,6 +69,9 @@ def init() -> None:
                 if name == "pronote_done":
                     c.execute("UPDATE homework SET pronote_done = done")
 
+        if "kind" not in {r["name"] for r in c.execute("PRAGMA table_info(sync_log)")}:
+            c.execute("ALTER TABLE sync_log ADD COLUMN kind TEXT NOT NULL DEFAULT 'ok'")
+            c.execute("UPDATE sync_log SET kind = 'error' WHERE ok = 0")
         _migrate_ids(c)
 
 
