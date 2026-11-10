@@ -98,6 +98,54 @@ def _files(hid: str, h) -> str:
     return json.dumps(out)
 
 
+def _num(v, out_of=None) -> float | None:
+    """« 14,5 » -> 14.5 ; « Abs », « N.Not », vide -> None. Ramené sur 20 si le barème est différent."""
+    try:
+        x = float(str(v).strip().replace(",", "."))
+        o = float(str(out_of).strip().replace(",", ".")) if out_of not in (None, "") else 20.0
+    except ValueError:
+        return None
+    return round(x * 20 / o, 2) if o > 0 else None
+
+
+def _sync_results(client) -> int:
+    """Moyennes par matière (élève et classe) pour chaque période commencée. Retourne le nombre de périodes."""
+    today = date.today()
+    n = 0
+    for pos, p in enumerate(client.periods):
+        start = getattr(p, "start", None)
+        if start is not None and hasattr(start, "date"):
+            start = start.date()
+        if start is not None and start > today:
+            continue  # période pas encore commencée
+        avgs = p.averages
+        if not avgs:
+            continue  # rien de publié : on garde ce qu'on avait
+        end = getattr(p, "end", None)
+        end = end.date() if end is not None and hasattr(end, "date") else end
+        try:
+            overall = _num(p.overall_average)
+            if overall is not None and overall < 0:
+                overall = None
+        except Exception:  # noqa: BLE001
+            overall = None
+        try:
+            class_overall = _num(p.class_overall_average)
+        except Exception:  # noqa: BLE001
+            class_overall = None
+        with db.conn() as c:
+            c.execute("DELETE FROM averages WHERE period = ?", (p.name,))
+            for a in avgs:
+                c.execute("INSERT OR REPLACE INTO averages (period, subject, student, class_avg, min, max) VALUES (?,?,?,?,?,?)",
+                          (p.name, a.subject.name, _num(a.student, a.out_of), _num(a.class_average, a.out_of),
+                           _num(a.min, a.out_of), _num(a.max, a.out_of)))
+            c.execute("INSERT OR REPLACE INTO periods (name, position, start, end, overall, class_overall) VALUES (?,?,?,?,?,?)",
+                      (p.name, pos, start.isoformat() if start else None, end.isoformat() if end else None,
+                       overall, class_overall))
+        n += 1
+    return n
+
+
 def _sync() -> str:
     client = get_client()
     today = date.today()
@@ -160,7 +208,12 @@ def _sync() -> str:
                 (h.subject.name, h.description, h.date.isoformat(), files, status,
                  int(status == "done"), p_prev, hid),
             )
-    return f"{len(hws)} devoirs lus, {pulled} nouveaux, {pushed} statuts renvoyés vers Pronote"
+    msg = f"{len(hws)} devoirs lus, {pulled} nouveaux, {pushed} statuts renvoyés vers Pronote"
+    try:  # les résultats ne doivent jamais faire échouer la synchro des devoirs
+        msg += f", moyennes de {_sync_results(client)} période(s)"
+    except Exception as e:  # noqa: BLE001
+        msg += f" (moyennes non lues : {type(e).__name__})"
+    return msg
 
 
 def notify(title: str, message: str) -> str | None:

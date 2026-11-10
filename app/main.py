@@ -73,6 +73,24 @@ def get_card(c, hw_id: str) -> dict:
     return card_dict(row)
 
 
+def results_data() -> dict:
+    """Moyennes par période : {periods: [{name, overall, class_overall, subjects: [...]}]}, la plus récente en dernier."""
+    with db.conn() as c:
+        periods = c.execute("SELECT * FROM periods ORDER BY position").fetchall()
+        out = []
+        for p in periods:
+            rows = c.execute("SELECT subject, student, class_avg, min, max FROM averages WHERE period = ? ORDER BY subject",
+                             (p["name"],)).fetchall()
+            out.append({"name": p["name"], "start": p["start"], "end": p["end"], "overall": p["overall"],
+                        "class_overall": p["class_overall"], "subjects": [dict(r) for r in rows]})
+    return {"periods": out}
+
+
+@app.get("/api/results")
+def api_results():
+    return results_data()
+
+
 @app.get("/")
 def index(request: Request):
     with db.conn() as c:
@@ -82,7 +100,7 @@ def index(request: Request):
     return templates.TemplateResponse(
         request,
         "index.html",
-        {"cards": cards, "last": last, "today": date.today().isoformat(),
+        {"cards": cards, "results": results_data(), "last": last, "today": date.today().isoformat(),
          "child": os.environ.get("CHILD_NAME", ""), "push": sync.push_enabled(),
          "keep_days": DONE_KEEP_DAYS, "auth_problem": bool(last and last["kind"] == "auth"),
          "fonds": sorted(p.stem for p in (Path(__file__).parent / "static" / "fonds").glob("*.jpg"))},

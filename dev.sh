@@ -47,5 +47,10 @@ export ALLOW_RECONNECT=0            # jamais de connexion à Pronote depuis le p
 export APP_PASSWORD=""              # pas d'authentification en local (ne pas charger .env)
 export CHILD_NAME="${CHILD_NAME:-}"
 
+# pas de Pronote en dev : des moyennes fictives si la base copiée n'en contient pas encore
+if [ -z "$(.venv/bin/python -c "import sqlite3;print(sqlite3.connect('$DEV/devoirs.db').execute('select 1 from averages limit 1').fetchone() or '')" 2>/dev/null)" ]; then
+  .venv/bin/python -m app.demo
+fi
+
 echo "Dev sur http://127.0.0.1:$PORT  (données : $DEV/, pas de Pronote)"
 exec .venv/bin/uvicorn app.main:app --reload --host 127.0.0.1 --port "$PORT"

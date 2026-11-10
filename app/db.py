@@ -21,6 +21,24 @@ CREATE TABLE IF NOT EXISTS homework (
     source       TEXT NOT NULL DEFAULT 'pronote',
     updated_at   TEXT NOT NULL DEFAULT (datetime('now'))
 );
+CREATE TABLE IF NOT EXISTS periods (
+    name          TEXT PRIMARY KEY,
+    position      INTEGER NOT NULL,
+    start         TEXT,
+    end           TEXT,
+    overall       REAL,          -- moyenne générale de l'élève (sur 20)
+    class_overall REAL,          -- moyenne générale de la classe (sur 20)
+    updated_at    TEXT NOT NULL DEFAULT (datetime('now'))
+);
+CREATE TABLE IF NOT EXISTS averages (   -- toutes les valeurs sont ramenées sur 20
+    period    TEXT NOT NULL,
+    subject   TEXT NOT NULL,
+    student   REAL,
+    class_avg REAL,
+    min       REAL,
+    max       REAL,
+    PRIMARY KEY (period, subject)
+);
 CREATE TABLE IF NOT EXISTS sync_log (
     id      INTEGER PRIMARY KEY AUTOINCREMENT,
     at      TEXT NOT NULL DEFAULT (datetime('now')),
