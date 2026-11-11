@@ -87,6 +87,8 @@ with TestClient(app) as cl:
     assert "/static/packfx.js" in page and "/static/packfx.css" in page
     assert cl.get("/static/packfx.js").status_code == 200 and "PackFX" in cl.get("/static/packfx.js").text
     assert any(p["opened_at"] and p["rarity"] and p["icon"] for p in cl.get("/api/game").json()["packs_list"]), "récompenses obtenues : rareté et icône"
+    import re
+    assert not re.search(r"\.avwrap \.lvl \{[^}]*pointer-events:\s*none", page), "la pastille de niveau doit rester cliquable"
     assert 'id="goals"' in page and "const GAME = " in page and 'data-view="objectifs"' in page
 import random as _r
 rng = _r.Random(0); seen = {}
