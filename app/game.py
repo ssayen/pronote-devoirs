@@ -11,17 +11,29 @@ from datetime import date, timedelta
 POINTS_PER_LEVEL = 10
 MISSION_COUNT = 3          # missions actives en même temps
 MISSION_DAYS = 21
+# Barèmes des missions (à ajuster ici)
+AVG_UP = [(0.5, 1), (1, 2), (2, 4)]              # (gain de moyenne dans la matière, points)
+BEAT_CLASS = [(1, 2), (2, 4), (None, 5)]          # (écart maximal avec la moyenne de la classe, points) ; None = au-delà
+OVERALL_UP = [(0.2, 2), (0.5, 5)]                 # (gain de moyenne générale, points)
+GRADES_ABOVE_CLASS = [(2, 1), (5, 3)]             # (nombre de notes au-dessus de la moyenne de la classe, points)
+GOOD_GRADES = [(3, 16, 2), (3, 18, 5), (3, 20, 10)]   # (nombre de notes, note minimale sur 20, points)
 # Liste provisoire : les vraies récompenses seront choisies par le parent. La rareté pilote l'animation d'ouverture.
 RARITY_WEIGHTS = {"common": 50, "rare": 30, "epic": 15, "legendary": 5}
-REWARDS = [
-    {"label": "Une heure d'écran en plus", "rarity": "common", "icon": "⏰"},
-    {"label": "Un jeu de société", "rarity": "common", "icon": "🎲"},
-    {"label": "Une BD", "rarity": "common", "icon": "📖"},
-    {"label": "Un livre", "rarity": "rare", "icon": "📚"},
-    {"label": "Une soirée film au choix", "rarity": "rare", "icon": "🍿"},
-    {"label": "Une sortie ciné", "rarity": "epic", "icon": "🎬"},
-    {"label": "Un goûter au restaurant", "rarity": "epic", "icon": "🍔"},
-    {"label": "Un jeu vidéo", "rarity": "legendary", "icon": "🎮"},
+REWARDS = [   # les crédits sont des jetons de poker qui s'échangent contre du temps d'écran
+    {"label": "1 h d'écran gratuite", "rarity": "common", "icon": "⏰"},
+    {"label": "5 crédits gratuits", "rarity": "common", "icon": "🪙"},
+    {"label": "Apéro chips et boisson ce soir", "rarity": "common", "icon": "🥤"},
+    {"label": "2 h d'écran gratuites", "rarity": "rare", "icon": "⏳"},
+    {"label": "10 crédits gratuits", "rarity": "rare", "icon": "🪙"},
+    {"label": "Un repas livré au choix", "rarity": "rare", "icon": "🍕"},
+    {"label": "Un livre de poche", "rarity": "rare", "icon": "📖"},
+    {"label": "Un brunch en famille", "rarity": "epic", "icon": "🥐"},
+    {"label": "Une soirée ciné en famille (film au choix)", "rarity": "epic", "icon": "🎬"},
+    {"label": "20 crédits gratuits", "rarity": "epic", "icon": "💰"},
+    {"label": "Un livre relié ou une BD", "rarity": "epic", "icon": "📚"},
+    {"label": "Un jeu vidéo au choix (prix raisonnable)", "rarity": "legendary", "icon": "🎮"},
+    {"label": "Un super crédit", "rarity": "legendary", "icon": "💎"},
+    {"label": "Un vêtement au choix (prix raisonnable)", "rarity": "legendary", "icon": "👕"},
 ]
 BY_LABEL = {r["label"]: r for r in REWARDS}
 
@@ -66,12 +78,15 @@ def award_grades(c) -> None:
 
 # ---- missions ----
 
+def _current_period(c):
+    """Période la plus récente qui a des moyennes."""
+    return c.execute("SELECT periods.* FROM periods WHERE EXISTS (SELECT 1 FROM averages WHERE averages.period = periods.name) "
+                     "ORDER BY position DESC LIMIT 1").fetchone()
+
+
 def _current_averages(c) -> list:
-    """Moyennes de la période la plus récente qui en a."""
-    r = c.execute("SELECT period FROM averages JOIN periods ON periods.name = averages.period ORDER BY periods.position DESC LIMIT 1").fetchone()
-    if not r:
-        return []
-    return [dict(x) for x in c.execute("SELECT * FROM averages WHERE period = ? AND student IS NOT NULL", (r["period"],))]
+    p = _current_period(c)
+    return [dict(x) for x in c.execute("SELECT * FROM averages WHERE period = ? AND student IS NOT NULL", (p["name"],))] if p else []
 
 
 def _pretty(s: str) -> str:
@@ -85,27 +100,39 @@ def _fmt(x) -> str:
 
 
 def _candidates(c) -> list[dict]:
-    avgs = _current_averages(c)
     out = []
-    for a in avgs:
-        if a["student"] is not None and a["student"] < 19:
-            for delta, pts in ((0.5, 1), (1, 2), (2, 3)):
+    for a in _current_averages(c):
+        subj = _pretty(a["subject"])
+        if a["student"] < 19:
+            for delta, pts in AVG_UP:
                 out.append({"kind": "avg_up", "subject": a["subject"], "points": pts, "params": {"delta": delta},
                             "baseline": {"avg": a["student"], "period": a["period"]},
-                            "label": f"Améliorer la moyenne de {_pretty(a['subject'])} de {_fmt(delta)} point{'s' if delta > 1 else ''}"})
+                            "label": f"Améliorer la moyenne de {subj} de {_fmt(delta)} point{'s' if delta > 1 else ''}"})
         if a["class_avg"] is not None and a["student"] < a["class_avg"]:
             gap = a["class_avg"] - a["student"]
-            out.append({"kind": "beat_class", "subject": a["subject"], "points": 1 if gap <= 1 else 2 if gap <= 2.5 else 3,
-                        "params": {}, "baseline": {"avg": a["student"], "class_avg": a["class_avg"], "period": a["period"]},
-                        "label": f"Dépasser la moyenne de la classe en {_pretty(a['subject'])}"})
-    for n, t, pts in ((2, 14, 1), (3, 16, 2), (3, 18, 3)):
+            pts = next(p for limit, p in BEAT_CLASS if limit is None or gap <= limit)
+            out.append({"kind": "beat_class", "subject": a["subject"], "points": pts, "params": {},
+                        "baseline": {"avg": a["student"], "class_avg": a["class_avg"], "period": a["period"]},
+                        "label": f"Dépasser la moyenne de la classe en {subj}"})
+    per = _current_period(c)
+    if per and per["overall"] is not None and per["overall"] < 19.5:
+        for delta, pts in OVERALL_UP:
+            out.append({"kind": "overall_up", "subject": None, "points": pts, "params": {"delta": delta},
+                        "baseline": {"avg": per["overall"], "period": per["name"]},
+                        "label": f"Améliorer ta moyenne générale de {_fmt(delta)} point{'s' if delta > 1 else ''}"})
+    for n, pts in GRADES_ABOVE_CLASS:
+        out.append({"kind": "above_class", "subject": None, "points": pts, "params": {"n": n}, "baseline": {},
+                    "label": f"Obtenir {n} notes au-dessus de la moyenne de la classe (n'importe quelle matière)"})
+    for n, t, pts in GOOD_GRADES:
+        what = "de 20/20" if t >= 20 else f"d'au moins {t}/20"
         out.append({"kind": "good_grades", "subject": None, "points": pts, "params": {"n": n, "min": t}, "baseline": {},
-                    "label": f"Obtenir {n} notes d'au moins {t}/20 (n'importe quelle matière)"})
+                    "label": f"Obtenir {n} notes {what} (n'importe quelle matière)"})
     return out
 
 
 def generate(c, rng=random) -> int:
-    """Complète jusqu'à MISSION_COUNT missions actives (types variés, jamais deux fois la même matière ni le même objectif)."""
+    """Complète jusqu'à MISSION_COUNT missions actives : on tire d'abord un type (en évitant ceux déjà actifs),
+    puis une mission de ce type ; jamais deux fois la même matière ni le même objectif."""
     rows = c.execute("SELECT kind, subject, label FROM missions WHERE status = 'active'").fetchall()
     kinds = [r["kind"] for r in rows]
     labels = {r["label"] for r in rows}
@@ -116,7 +143,9 @@ def generate(c, rng=random) -> int:
         pool = [m for m in cands if m["label"] not in labels and (m["subject"] is None or m["subject"] not in subjects)]
         if not pool:
             break
-        m = rng.choice([x for x in pool if x["kind"] not in kinds] or pool)      # on varie les types
+        available = sorted({m["kind"] for m in pool})
+        kind = rng.choice([k for k in available if k not in kinds] or available)
+        m = rng.choice([x for x in pool if x["kind"] == kind])
         today = date.today()
         c.execute("INSERT INTO missions (kind, subject, params, baseline, points, label, started_at, expires_at) VALUES (?,?,?,?,?,?,?,?)",
                   (m["kind"], m["subject"], json.dumps(m["params"]), json.dumps(m["baseline"]), m["points"], m["label"],
@@ -140,7 +169,16 @@ def progress(c, m) -> dict:
                     "text": f"{_fmt(base['avg'])} → {_fmt(cur)} (objectif {_fmt(base['avg'] + params['delta'])})"}
         cl = r["class_avg"] if r and r["class_avg"] is not None else base["class_avg"]
         return {"done": cur > cl, "current": cur, "target": cl, "text": f"Toi {_fmt(cur)} · classe {_fmt(cl)}"}
-    n = c.execute("SELECT COUNT(*) FROM grades WHERE date >= ? AND grade >= ?", (m["started_at"], params["min"])).fetchone()[0]
+    if m["kind"] == "overall_up":
+        r = c.execute("SELECT overall FROM periods WHERE name = ?", (base["period"],)).fetchone()
+        cur = r["overall"] if r and r["overall"] is not None else base["avg"]
+        gain = round(cur - base["avg"], 2)
+        return {"done": gain >= params["delta"] - 1e-9, "current": max(gain, 0), "target": params["delta"],
+                "text": f"{_fmt(base['avg'])} → {_fmt(cur)} (objectif {_fmt(base['avg'] + params['delta'])})"}
+    if m["kind"] == "above_class":
+        n = c.execute("SELECT COUNT(*) FROM grades WHERE date >= ? AND class_avg IS NOT NULL AND grade > class_avg", (m["started_at"],)).fetchone()[0]
+    else:   # good_grades
+        n = c.execute("SELECT COUNT(*) FROM grades WHERE date >= ? AND grade >= ?", (m["started_at"], params["min"])).fetchone()[0]
     return {"done": n >= params["n"], "current": min(n, params["n"]), "target": params["n"], "text": f"{min(n, params['n'])} / {params['n']}"}
 
 

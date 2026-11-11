@@ -70,6 +70,44 @@ with db.conn() as c:
               (json.dumps({"n": 9, "min": 16}), iso(30), iso(1)))
     game.evaluate(c); assert c.execute("SELECT status FROM missions WHERE label = 'trop tard'").fetchone()[0] == "expired"
 
+    # --- barèmes ---
+    c.execute("UPDATE periods SET overall = 13.0 WHERE name = 'Trimestre 1'")
+    c.execute("UPDATE averages SET student = 12.0 WHERE subject = 'MATHEMATIQUES'")   # remet l'état de départ
+    cands = game._candidates(c)
+    pts = lambda kind, pred=lambda m: True: sorted(m["points"] for m in cands if m["kind"] == kind and pred(m))
+    assert sorted({m["points"] for m in cands if m["kind"] == "avg_up"}) == [1, 2, 4]
+    assert pts("beat_class", lambda m: m["subject"] == "ARTS") == [2], "écart 0,5 : 2 pts"
+    assert pts("beat_class", lambda m: m["subject"] == "ANGLAIS") == [5], "écart 2,5 : 5 pts"
+    assert pts("overall_up") == [2, 5] and pts("above_class") == [1, 3] and pts("good_grades") == [2, 5, 10]
+    assert {m["points"] for m in cands if m["kind"] == "beat_class"} <= {2, 4, 5}
+    c.execute("UPDATE averages SET student = 11.0, class_avg = 12.5 WHERE subject = 'ARTS'")   # écart 1,5 : 4 pts
+    assert [m["points"] for m in game._candidates(c) if m["kind"] == "beat_class" and m["subject"] == "ARTS"] == [4]
+    c.execute("UPDATE averages SET student = 14.0, class_avg = 14.5 WHERE subject = 'ARTS'")
+    for _ in range(40):   # le tirage commence par le type : les 5 types apparaissent, jamais deux fois le même d'emblée
+        c.execute("DELETE FROM missions"); game.generate(c)
+        ks = [r[0] for r in c.execute("SELECT kind FROM missions")]; assert len(ks) == 3 and len(set(ks)) == 3, ks
+        seen_kinds = globals().setdefault("seen_kinds", set()); seen_kinds.update(ks)
+    assert seen_kinds == {"avg_up", "beat_class", "overall_up", "above_class", "good_grades"}, seen_kinds
+
+    # moyenne générale
+    c.execute("DELETE FROM missions")
+    c.execute("INSERT INTO missions (kind, params, baseline, points, label, started_at, expires_at) VALUES ('overall_up',?,?,2,'+0,2 générale',?,?)",
+              (json.dumps({"delta": 0.2}), json.dumps({"avg": 13.0, "period": "Trimestre 1"}), iso(5), iso(-10)))
+    m = c.execute("SELECT * FROM missions").fetchone(); assert game.progress(c, m)["done"] is False
+    c.execute("UPDATE periods SET overall = 13.1 WHERE name = 'Trimestre 1'"); assert game.progress(c, m)["done"] is False
+    c.execute("UPDATE periods SET overall = 13.2 WHERE name = 'Trimestre 1'"); assert game.progress(c, m)["done"] is True
+
+    # notes au-dessus de la moyenne de la classe : note > moyenne de l'épreuve, notes postérieures au début, moyenne connue
+    c.execute("DELETE FROM missions")
+    c.execute("INSERT INTO missions (kind, params, baseline, points, label, started_at, expires_at) VALUES ('above_class',?,'{}',1,'2 notes > classe',?,?)",
+              (json.dumps({"n": 2}), iso(0), iso(-10)))
+    m = c.execute("SELECT * FROM missions").fetchone()
+    for i, (g, cl, d) in enumerate([(15, 12, iso(0)), (12, 12, iso(0)), (9, 12, iso(0)), (16, None, iso(0)), (18, 10, iso(3))]):
+        c.execute("INSERT INTO grades (id, period, subject, date, grade, class_avg) VALUES (?, 'T1', 'X', ?, ?, ?)", (f"ac{i}", d, g, cl))
+    assert game.progress(c, m)["current"] == 1, "seule la note 15 > 12 compte (égalité, sous la moyenne, sans moyenne et antérieure exclues)"
+    c.execute("INSERT INTO grades (id, period, subject, date, grade, class_avg) VALUES ('ac9', 'T1', 'X', ?, 14, 11)", (iso(0),))
+    assert game.progress(c, m)["done"] is True
+
     # --- niveaux et paquets : un paquet par niveau, ouvert une seule fois ---
     c.execute("DELETE FROM points"); game.award(c, "mission", "t1", 25, "test")
     game.ensure_packs(c); game.ensure_packs(c)

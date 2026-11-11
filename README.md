@@ -47,7 +47,13 @@ les garde en local et renvoie le statut « terminé » vers Pronote.
 
 - **Points :** chaque note de 16 ou plus (ramenée sur 20) rapporte 1 point (16-17), 2 (18-19) ou 3 (20) ; une mission réussie rapporte 1 à 3 points selon sa difficulté. Seules les notes postérieures à l'activation comptent (pas de rattrapage de l'historique). Le journal `points` est la source de vérité, une référence unique par événement évite tout doublon.
 - **Niveaux :** paliers fixes de 10 points (`game.POINTS_PER_LEVEL`). Chaque niveau gagné donne un paquet à ouvrir ; la récompense est tirée au hasard dans une liste provisoire (`game.REWARDS`, chaque récompense a une rareté : commun, rare, épique ou légendaire, tirée avec `game.RARITY_WEIGHTS`) : les vraies récompenses seront choisies par le parent. L'ouverture est une animation plein écran (`static/packfx.js`) aux couleurs de la rareté ; elle respecte `prefers-reduced-motion`.
-- **Missions :** 3 actives en même temps, tirées au hasard, valables 21 jours : améliorer la moyenne d'une matière (la moyenne de départ est mémorisée), dépasser la moyenne de la classe, obtenir N notes d'un niveau donné (notes postérieures au début de la mission).
+- **Missions :** 3 actives en même temps, de types différents, tirées au hasard, valables 21 jours (`game.MISSION_DAYS`). Les barèmes sont en tête de `app/game.py` :
+  - améliorer la moyenne d'une matière : +0,5 = 1 pt, +1 = 2, +2 = 4 (la moyenne de départ est mémorisée) ;
+  - dépasser la moyenne de la classe dans une matière (proposé seulement si on est en dessous) : écart jusqu'à 1 = 2 pts, jusqu'à 2 = 4, au-delà = 5 ;
+  - améliorer sa moyenne générale : +0,2 = 2 pts, +0,5 = 5 ;
+  - notes au-dessus de la moyenne de la classe (note > moyenne de l'épreuve) : 2 notes = 1 pt, 5 notes = 3 ;
+  - notes élevées : 3 notes ≥ 16 = 2 pts, 3 notes ≥ 18 = 5, 3 notes de 20 = 10.
+  Seules les notes postérieures au début de la mission comptent.
 - **Affichage :** onglet « Objectifs », niveau et barre de progression sur l'avatar (le parent consulte, sans ouvrir les paquets).
 
 ### Compte administrateur (tests)
