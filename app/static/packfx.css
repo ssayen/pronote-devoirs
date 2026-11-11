@@ -37,6 +37,13 @@
 #goals .g-list li.rar { border-left:4px solid var(--rc); padding-left:.6rem; }
 #goals .g-list .rtag { font-size:.72rem; font-weight:800; letter-spacing:.08em; text-transform:uppercase; color:var(--rc); margin-left:.4rem; }
 
+#goals .g-rewards li { display:flex; align-items:center; justify-content:space-between; gap:.8rem; }
+#goals .g-rewards li.given .g-rw { opacity:.55; text-decoration:line-through; text-decoration-color:#0004; }
+#goals .g-state { flex:none; font-size:.78rem; font-weight:700; padding:.15rem .6rem; border-radius:999px; background:color-mix(in srgb, var(--doing) 25%, transparent); }
+#goals .g-state.ok { background:color-mix(in srgb, var(--done) 25%, transparent); }
+#goals .g-deliver { flex:none; display:flex; align-items:center; gap:.4rem; cursor:pointer; font-size:.9rem; font-weight:600; padding:.3rem .5rem; border-radius:8px; }
+#goals .g-deliver input { width:1.25rem; height:1.25rem; accent-color:var(--done); cursor:pointer; }
+
 /* ---- ouverture plein écran ---- */
 .pfx { position:fixed; inset:0; z-index:1000; display:grid; place-items:center; overflow:hidden; color:#fff; font-family:system-ui, sans-serif;
   background:radial-gradient(circle at 50% 55%, #2b1a63 0%, #0c0720 60%, #04020c 100%); animation:pfxfade .35s ease-out; }

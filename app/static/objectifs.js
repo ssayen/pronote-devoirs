@@ -105,14 +105,35 @@
     return sec;
   }
 
+  const canDeliver = () => READONLY || document.documentElement.dataset.role === "admin";   // le parent coche (l'admin aussi, pour tester)
+
+  async function setDelivered(level, delivered, box) {
+    box.disabled = true;
+    try {
+      const r = await fetch(`/api/packs/${level}/delivered`, { method: "POST", headers: JSON_HDR, body: JSON.stringify({ delivered }) });
+      if (!r.ok) throw new Error(r.status);
+      await refresh();
+    } catch (e) { box.checked = !delivered; box.disabled = false; toast("Enregistrement impossible, réessayer"); }
+  }
+
   function rewards(g) {
-    const got = g.packs_list.filter(p => p.opened_at);
+    const got = g.packs_list.filter(p => p.opened_at).sort((a, b) => !!a.delivered_at - !!b.delivered_at || b.level - a.level);   // à remettre d'abord
     if (!got.length) return null;
-    const sec = el("section", "g-sec"); sec.append(el("h2", null, "Récompenses obtenues"));
-    const ul = el("ul", "g-list");
+    const pending = got.filter(p => !p.delivered_at).length;
+    const sec = el("section", "g-sec");
+    sec.append(el("h2", null, "Récompenses obtenues" + (pending ? ` (${pending} à remettre)` : "")));
+    const ul = el("ul", "g-list g-rewards");
     for (const p of got) {
-      const li = el("li", "rar rar-" + (p.rarity || "common"));
-      li.append(`${p.icon || "🎁"} Niveau ${p.level} : ${p.reward}`, el("span", "rtag", (PackFX.RARITY[p.rarity] || {}).label || ""));
+      const li = el("li", "rar rar-" + (p.rarity || "common") + (p.delivered_at ? " given" : ""));
+      const main = el("span", "g-rw");
+      main.append(`${p.icon || "🎁"} Niveau ${p.level} : ${p.reward}`, el("span", "rtag", (PackFX.RARITY[p.rarity] || {}).label || ""));
+      li.append(main);
+      if (canDeliver()) {
+        const lab = el("label", "g-deliver"), box = el("input"); box.type = "checkbox"; box.checked = !!p.delivered_at;
+        box.onchange = () => setDelivered(p.level, box.checked, box);
+        lab.append(box, " Remise");
+        li.append(lab);
+      } else li.append(el("span", "g-state" + (p.delivered_at ? " ok" : ""), p.delivered_at ? "✅ Remise" : "À recevoir"));
       ul.append(li);
     }
     sec.append(ul); return sec;

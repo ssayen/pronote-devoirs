@@ -123,7 +123,8 @@ CREATE TABLE IF NOT EXISTS packs (        -- un paquet par niveau atteint
     created_at TEXT NOT NULL DEFAULT (datetime('now')),
     opened_at  TEXT,
     reward     TEXT,
-    rarity     TEXT
+    rarity     TEXT,
+    delivered_at TEXT                     -- remis à l'élève (coché par le parent)
 );
 CREATE TABLE IF NOT EXISTS settings (     -- personnalisation de l'interface (clé / valeur), conservée dans le volume de données
     key   TEXT PRIMARY KEY,
@@ -179,6 +180,8 @@ def init() -> None:
 
         if "rarity" not in {r["name"] for r in c.execute("PRAGMA table_info(packs)")}:
             c.execute("ALTER TABLE packs ADD COLUMN rarity TEXT")
+        if "delivered_at" not in {r["name"] for r in c.execute("PRAGMA table_info(packs)")}:
+            c.execute("ALTER TABLE packs ADD COLUMN delivered_at TEXT")
         if "kind" not in {r["name"] for r in c.execute("PRAGMA table_info(sync_log)")}:
             c.execute("ALTER TABLE sync_log ADD COLUMN kind TEXT NOT NULL DEFAULT 'ok'")
             c.execute("UPDATE sync_log SET kind = 'error' WHERE ok = 0")

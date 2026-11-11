@@ -121,6 +121,11 @@ with TestClient(app) as cl:
     assert g["level"] >= 3 and any(p["level"] == 3 and not p["opened_at"] for p in g["packs_list"]) and g["missions"] and g["history"]
     j = cl.post("/api/packs/3/open").json(); assert j["reward"] in game.BY_LABEL and j["rarity"] in game.RARITY_WEIGHTS and j["icon"]
     assert cl.post("/api/packs/3/open").status_code == 404
+    assert cl.post("/api/packs/3/delivered", json={"delivered": True}).status_code == 200
+    assert next(x for x in cl.get("/api/game").json()["packs_list"] if x["level"] == 3)["delivered_at"]
+    assert cl.post("/api/packs/3/delivered", json={"delivered": False}).status_code == 200
+    assert next(x for x in cl.get("/api/game").json()["packs_list"] if x["level"] == 3)["delivered_at"] is None
+    assert cl.post("/api/packs/99/delivered", json={"delivered": True}).status_code == 404
     page = cl.get("/").text
     assert "/static/packfx.js" in page and "/static/packfx.css" in page
     assert cl.get("/static/packfx.js").status_code == 200 and "PackFX" in cl.get("/static/packfx.js").text

@@ -165,6 +165,21 @@ def admin_points(body: PointsIn, request: Request):
         return game.summary(c)
 
 
+class DeliveredIn(BaseModel):
+    delivered: bool
+
+
+@app.post("/api/packs/{level}/delivered")
+def pack_delivered(level: int, body: DeliveredIn, request: Request):
+    """Le parent coche les récompenses remises à l'élève (le compte administrateur peut aussi, pour tester)."""
+    if (request.state.user or {}).get("role") not in ("parent", "admin") and not db.LOCAL:
+        raise HTTPException(403, "Réservé au parent.")
+    with db.conn() as c:
+        if not game.set_delivered(c, level, body.delivered):
+            raise HTTPException(404, "Récompense introuvable (paquet non ouvert).")
+    return {"level": level, "delivered": body.delivered}
+
+
 @app.post("/api/packs/{level}/open")
 def open_pack(level: int):
     with db.conn() as c:

@@ -119,6 +119,18 @@ with TestClient(app) as a, TestClient(app) as b:
             assert getattr(p, method)(url, **kw).status_code == 403, url
         assert b.get("/api/settings").json()["theme"] == "dark" and len(b.get("/api/homework").json()) == 1
         assert reg(p, "papa", role="parent", link=code, image=B64P, pin="1234").status_code == 403, "code à usage unique"
+        # le parent coche les récompenses remises (seule écriture permise), l'élève ne le peut pas
+        with db.as_user(uid_of("bob")), db.conn() as c:
+            from app import game as _g
+            c.execute("INSERT OR IGNORE INTO packs (level) VALUES (2)"); _g.open_pack(c, 2)
+            c.execute("INSERT OR IGNORE INTO packs (level) VALUES (3)")
+        assert p.post("/api/packs/2/delivered", json={"delivered": True}).status_code == 200
+        assert [x["delivered_at"] is not None for x in p.get("/api/game").json()["packs_list"] if x["level"] == 2] == [True]
+        assert b.get("/api/game").json()["packs_list"][-1]["delivered_at"] is not None, "l'élève voit que la récompense est remise"
+        assert b.post("/api/packs/2/delivered", json={"delivered": False}).status_code == 403
+        assert p.post("/api/packs/3/delivered", json={"delivered": True}).status_code == 404, "paquet non ouvert"
+        assert p.post("/api/packs/2/delivered", json={"delivered": False}).status_code == 200
+        assert p.post("/api/packs/2/open").status_code == 403, "le parent n'ouvre toujours pas de paquet"
         assert p.post("/logout").status_code == 200
     assert uid_of("maman") not in __import__("app.accounts", fromlist=["x"]).user_ids(), "la synchro ne concerne que les élèves"
     assert "maman" in b.post("/api/parent-invite").json()["parents"]

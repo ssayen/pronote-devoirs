@@ -209,6 +209,12 @@ def open_pack(c, level: int, rng=random) -> dict | None:
     return dict(reward) if ok else None
 
 
+def set_delivered(c, level: int, delivered: bool) -> bool:
+    """Le parent coche (ou décoche) une récompense remise ; seulement pour un paquet ouvert."""
+    return c.execute("UPDATE packs SET delivered_at = " + ("datetime('now')" if delivered else "NULL") +
+                     " WHERE level = ? AND opened_at IS NOT NULL", (level,)).rowcount == 1
+
+
 def update(c) -> None:
     """À appeler après chaque synchro : points des notes, missions réussies / expirées, nouvelles missions, paquets."""
     since(c)
@@ -232,5 +238,5 @@ def overview(c) -> dict:
         d["progress"] = progress(c, m) if m["status"] == "active" else None
         missions.append(d)
     return {**summary(c), "missions": missions,
-            "packs_list": [{**dict(r), "icon": BY_LABEL.get(r["reward"], {}).get("icon")} for r in c.execute("SELECT level, opened_at, reward, rarity FROM packs ORDER BY level DESC")],
+            "packs_list": [{**dict(r), "icon": BY_LABEL.get(r["reward"], {}).get("icon")} for r in c.execute("SELECT level, opened_at, reward, rarity, delivered_at FROM packs ORDER BY level DESC")],
             "history": [dict(r) for r in c.execute("SELECT at, points, label FROM points ORDER BY id DESC LIMIT 15")]}
