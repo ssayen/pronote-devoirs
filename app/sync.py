@@ -3,6 +3,7 @@ import json
 import os
 import threading
 import urllib.request
+from urllib.parse import urlparse
 from datetime import date, timedelta
 
 import pronotepy
@@ -69,10 +70,45 @@ def get_client():
     if not client.logged_in:
         raise TokenExpired("Connexion refusée : jeton expiré, régénérer le QR code")
     save_creds(client)
+    remember_identity(client, creds["pronote_url"])  # sans requête supplémentaire ; permet de rattacher un parent à cet élève
     child = child_name()
-    if child:
+    if child and hasattr(client, "set_child"):  # seulement les comptes parent (un compte élève n'a qu'un enfant : lui-même)
         client.set_child(child)
     return client
+
+
+def display_name() -> str:
+    """Nom affiché dans l'en-tête : enfant choisi, à défaut le nom du compte Pronote (élève)."""
+    name = child_name()
+    if name:
+        return name
+    try:
+        with db.conn() as c:
+            r = c.execute("SELECT value FROM settings WHERE key = 'pronote_name'").fetchone()
+        return r["value"] if r else ""
+    except Exception:  # noqa: BLE001
+        return ""
+
+
+def _identity(info) -> dict:
+    return {"id": str(getattr(info, "id", "") or ""), "name": getattr(info, "name", "") or "",
+            "class": getattr(info, "class_name", "") or "", "est": getattr(info, "establishment", "") or ""}
+
+def remember_identity(client, url: str) -> None:
+    """Mémorise qui est ce compte Pronote (sert à nommer l'élève et à rattacher un parent à son enfant).
+    Élève : son propre identifiant. Parent : la liste de ses enfants. Une erreur ici ne fait jamais échouer la connexion."""
+    try:
+        host = (urlparse(url).hostname or "").lower()
+        values = {"pronote_name": client.info.name, "pronote_host": host}
+        if hasattr(client, "children"):
+            values["pronote_children"] = json.dumps([_identity(c) for c in client.children])
+        else:
+            me = _identity(client.info)
+            values.update({"pronote_id": me["id"], "pronote_class": me["class"], "pronote_est": me["est"]})
+        with db.conn() as c:
+            c.executemany("INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)", list(values.items()))
+    except Exception:  # noqa: BLE001
+        pass
 
 
 def push_enabled() -> bool:

@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="fr"{% if account %} data-account="{{ account }}"{% endif %}{% if settings.theme in ('light', 'dark') %} data-theme="{{ settings.theme }}"{% endif %}>
+<html lang="fr"{% if account %} data-account="{{ account }}" data-role="{{ role }}"{% endif %}{% if readonly %} data-readonly="1"{% endif %}{% if settings.theme in ('light', 'dark') %} data-theme="{{ settings.theme }}"{% endif %}>
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -20,6 +20,9 @@
   :root[data-theme="dark"] { color-scheme: dark; --bg:#12151c; --fg:#e6e9f0; --panel:#1b2030; --col:#1a1f2c; --line:#2d3446; --late:#ff6b5b; --shadow:#0008; }
   * { box-sizing: border-box; }
   [hidden] { display:none !important; }
+  /* compte parent : consultation seulement */
+  html[data-readonly] #add, html[data-readonly] [data-add], html[data-readonly] .card .mv, html[data-readonly] #d-edit, html[data-readonly] #d-del,
+  html[data-readonly] .sync form, html[data-readonly] [data-reconnect] { display:none !important; }
   body { font-family: system-ui, sans-serif; margin: 0; padding: 1rem; overflow-wrap:anywhere; background:var(--bg); color:var(--fg); }
   .tools { display:flex; align-items:center; gap:.8rem; }
   /* trois zones : titre | onglets | outils. Les onglets restent centrés quel que soit le contenu des outils (pas de décalage au changement d'onglet) */
@@ -459,9 +462,10 @@ function render() {
   $("#late").textContent = late ? `⚠ ${late} devoir(s) en retard` : "";
 }
 
+const READONLY = document.documentElement.hasAttribute("data-readonly");
 function card(c) {
   const e = el("div", "card" + (c.status === "done" ? " is-done" : ""));
-  e.draggable = true; e.dataset.id = c.id; e.style.setProperty("--h", hue(c.subject));
+  e.draggable = !READONLY; e.dataset.id = c.id; e.style.setProperty("--h", hue(c.subject));
   const bg = bgOf(c.subject);
   if (bg) { e.classList.add("bg"); e.style.backgroundImage = `var(--veil), url(/static/fonds/${bg}.jpg)`; }
   const subj = el("div", "subj"); subj.append(el("span", "si", icon(c.subject)), el("span", null, c.subject));
@@ -517,6 +521,7 @@ for (const col of document.querySelectorAll(".col")) {
 NARROW.addEventListener("change", applyNarrow);
 
 async function move(id, status) {
+  if (READONLY) return;
   const c = byId[id]; if (!c || c.status === status) return;
   const prev = c.status; c.status = status; render();       // affichage immédiat
   if (NARROW.matches && status !== activeStatus) {          // la carte quitte la colonne affichée : on confirme où elle est allée

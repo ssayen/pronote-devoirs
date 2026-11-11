@@ -111,7 +111,16 @@
     { label: "Changer d'avatar", icon: () => (avatar ? src(avatar) : null), action: () => go("perso") },
     { label: "Apparence (clair / sombre)", icon: () => null, mark: "◐", action: () => { go("perso"); setTimeout(() => { const l = $("#look"); if (l) l.scrollIntoView({ behavior: "smooth", block: "start" }); }, 50); } },
   ];
-  const account = document.documentElement.dataset.account;
+  const account = document.documentElement.dataset.account, role = document.documentElement.dataset.role;
+  if (document.documentElement.hasAttribute("data-readonly")) MENU.length = 0;   // parent : pas de personnalisation de l'élève
+  if (role === "student") MENU.push({ label: "Inviter un parent", icon: () => null, mark: "👪", action: async () => {
+    try {
+      const r = await fetch("/api/parent-invite", { method: "POST" });
+      if (!r.ok) throw new Error(r.status);
+      const j = await r.json();
+      window.prompt(`Code de liaison à donner à ton parent (valable ${j.days} jours, usage unique) :` + (j.parents.length ? `\nParents déjà liés : ${j.parents.join(", ")}` : ""), j.code);
+    } catch (e) { toast("Impossible de générer le code, réessayer"); }
+  } });
   if (account) MENU.push({ label: `Se déconnecter (${account})`, icon: () => null, mark: "⎋", action: async () => {
     try { await fetch("/logout", { method: "POST" }); if (window.caches) for (const k of await caches.keys()) await caches.delete(k); } catch (e) { /* hors ligne */ }
     location.href = "/login";

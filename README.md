@@ -36,3 +36,9 @@ les garde en local et renvoie le statut « terminé » vers Pronote.
 - Chaque compte a sa base, son jeton Pronote et ses fichiers dans `data/users/<id>/` ; la synchro tourne pour tous les comptes.
 - Migration : au premier démarrage, le premier compte créé récupère l'ancienne installation (`data/devoirs.db`, `credentials.json`, `files/`) ; son QR code est alors facultatif.
 - Sauvegarder tout `data/` (y compris `accounts.db`). `APP_USER` / `APP_PASSWORD` ne servent plus.
+
+### Élèves et parents
+
+- Un **compte élève** a ses propres données et son propre QR code Pronote (espace élève). Un **compte parent** est lié à un élève : il consulte ses devoirs, résultats et emploi du temps en lecture seule.
+- Liaison : à l'inscription, le parent est rattaché automatiquement à l'élève dont l'identifiant Pronote figure parmi ses enfants (à défaut : même nom, classe et établissement). Secours : l'élève génère un code (menu de l'avatar → « Inviter un parent », valable 7 jours, usage unique) que le parent saisit en plus de son QR code. L'élève doit s'être connecté avec son QR code avant.
+- Pour passer un compte existant d'un jeton parent à un jeton élève sans perdre l'historique : « Reconnecter Pronote » avec le QR code de l'élève (les cartes, l'avatar et les réglages sont conservés).

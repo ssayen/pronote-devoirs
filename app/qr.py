@@ -13,7 +13,8 @@ from urllib.parse import urlparse
 import zxingcpp
 from PIL import Image, ImageOps
 
-from .sync import client_class, creds_path, save_creds
+from . import db
+from .sync import client_class, creds_path, remember_identity, save_creds
 
 MAX_IMAGE_BYTES = 8 * 1024 * 1024
 Image.MAX_IMAGE_PIXELS = 40_000_000  # refuse les « bombes de décompression »
@@ -79,11 +80,22 @@ def validate_qr(qr: dict) -> None:
         raise QRError("Ce QR code vient d'un autre serveur Pronote que celui déjà configuré.")
 
 
-def connect(qr: dict, pin: str) -> str:
+def qr_role(qr: dict) -> str:
+    """Espace Pronote du QR code : 'parent' ou 'student'."""
+    page = str(qr.get("url", "")).split("?")[0].rsplit("/", 1)[-1]
+    return "parent" if "parent" in page else "student"
+
+
+def connect(qr: dict, pin: str, role: str | None = None) -> str:
     """Se connecte avec le QR code + PIN, écrit credentials.json, retourne le nom du compte."""
     if not re.fullmatch(r"\d{4}", pin or ""):
         raise QRError("Le PIN comporte 4 chiffres.")
     validate_qr(qr)
+    if "viescolaire" in str(qr.get("url", "")):
+        raise QRError("QR code d'un espace vie scolaire : non pris en charge.")
+    if role and qr_role(qr) != role:
+        raise QRError("Ce QR code vient d'un espace parent : il faut celui de l'espace élève." if role == "student"
+                      else "Ce QR code vient d'un espace élève : il faut celui de l'espace parent.")
     try:
         client = client_class(qr["url"]).qrcode_login(qr, pin, str(uuid.uuid4()))
         ok = bool(client.logged_in)
@@ -92,4 +104,6 @@ def connect(qr: dict, pin: str) -> str:
     if not ok:
         raise QRError(GENERIC_FAILURE)
     save_creds(client)
+    remember_identity(client, qr["url"])
     return client.info.name
+

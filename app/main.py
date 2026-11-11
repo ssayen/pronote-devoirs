@@ -149,7 +149,7 @@ def api_results():
 
 @app.get("/manifest.webmanifest")
 def manifest(request: Request):
-    child = sync.child_name() if (db.LOCAL or request.state.user) else ""
+    child = sync.display_name() if (db.LOCAL or request.state.user) else ""
     name = "StudyFun" + (f" — {child}" if child else "")
     icons = [
         {"src": "/static/icons/icon-192.png", "sizes": "192x192", "type": "image/png"},
@@ -186,7 +186,8 @@ def index(request: Request):
         request,
         "index.html",
         {"cards": cards, "results": results_data(), "lessons": lessons_data(), "settings": settings_data(), "avatars": avatar_list(), "last": last, "today": date.today().isoformat(),
-         "child": sync.child_name(), "account": (request.state.user or {}).get("login", ""), "push": sync.push_enabled(),
+         "child": sync.display_name(), "account": (request.state.user or {}).get("login", ""),
+         "role": (request.state.user or {}).get("role", "student"), "readonly": getattr(request.state, "readonly", False), "push": sync.push_enabled(),
          "keep_days": DONE_KEEP_DAYS, "auth_problem": bool(last and last["kind"] == "auth"),
          "fonds": sorted(p.stem for p in (Path(__file__).parent / "static" / "fonds").glob("*.jpg"))},
     )
@@ -290,7 +291,7 @@ class Reconnect(BaseModel):
 
 
 @app.post("/api/reconnect")
-def reconnect(body: Reconnect, background: BackgroundTasks):
+def reconnect(body: Reconnect, request: Request, background: BackgroundTasks):
     """Reconnexion à Pronote depuis une capture du QR code + son PIN. Rien n'est conservé hors credentials.json."""
     if os.environ.get("ALLOW_RECONNECT", "1") != "1":
         raise HTTPException(403, "Reconnexion désactivée dans cet environnement (ALLOW_RECONNECT=0).")
@@ -302,7 +303,7 @@ def reconnect(body: Reconnect, background: BackgroundTasks):
     if not lk.acquire(timeout=30):  # ne pas réécrire credentials.json pendant une synchro
         raise HTTPException(409, "Une synchronisation est en cours, réessayer dans un instant.")
     try:
-        name = qrlogin.connect(qrlogin.decode_image(data), body.pin)
+        name = qrlogin.connect(qrlogin.decode_image(data), body.pin, (request.state.user or {}).get("role"))
     except qrlogin.QRError as e:
         raise HTTPException(400, str(e)) from None
     finally:
