@@ -5,7 +5,7 @@ les garde en local et renvoie le statut « terminé » vers Pronote.
 
 ## Démarrage
 
-1. Copier `.env.example` en `.env` et le remplir (mot de passe, `CHILD_NAME`…), puis `docker compose up -d --build`
+1. Copier `.env.example` en `.env` et le remplir (`INVITE_CODE`…), puis `docker compose up -d --build`
    et ouvrir l'application.
 2. **Première connexion à Pronote** : un bandeau rouge propose « Reconnecter Pronote ». Dans Pronote (compte parent
    ou élève), générer un QR code d'application mobile + un PIN à 4 chiffres, en faire une **capture d'écran**, la
@@ -24,7 +24,15 @@ les garde en local et renvoie le statut « terminé » vers Pronote.
   (si `NOTIFY_URL` est défini) **une** notification, puis une autre à la reconnexion. Le message ne contient aucune donnée
   de devoirs. `NOTIFY_URL` accepte un topic [ntfy](https://ntfy.sh) (`https://ntfy.sh/<topic-secret>` ou votre serveur) ;
   `NOTIFY_TOKEN` est facultatif.
-- La reconnexion par capture est protégée par le mot de passe de l'application, ne conserve ni la capture ni le QR code
+- La reconnexion par capture exige d'être connecté, ne conserve ni la capture ni le QR code
   (seul `credentials.json` est écrit), refuse les adresses non HTTPS ou internes et tout autre serveur Pronote que
   celui déjà configuré. `ALLOW_RECONNECT=0` la désactive (utilisé par `dev.sh`).
 - API JSON : `GET /api/homework`.
+
+## Comptes (multi-utilisateur)
+
+- Pages `/login` et `/register` ; session par cookie (180 jours), mots de passe hachés (scrypt). Fonctionne aussi dans la PWA installée.
+- Inscription : identifiant, mot de passe, code d'invitation (`INVITE_CODE`), capture du QR code Pronote + PIN, prénom de l'enfant si compte parent.
+- Chaque compte a sa base, son jeton Pronote et ses fichiers dans `data/users/<id>/` ; la synchro tourne pour tous les comptes.
+- Migration : au premier démarrage, le premier compte créé récupère l'ancienne installation (`data/devoirs.db`, `credentials.json`, `files/`) ; son QR code est alors facultatif.
+- Sauvegarder tout `data/` (y compris `accounts.db`). `APP_USER` / `APP_PASSWORD` ne servent plus.

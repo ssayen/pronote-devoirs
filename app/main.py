@@ -4,24 +4,20 @@ import binascii
 import json
 import os
 import uuid
-import secrets
 from contextlib import asynccontextmanager
 from datetime import date
 from pathlib import Path
 from typing import Literal
 
 from fastapi import BackgroundTasks, Depends, FastAPI, HTTPException, Request
-from fastapi.responses import FileResponse, RedirectResponse
+from fastapi.responses import FileResponse, JSONResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
-from fastapi.security import HTTPBasic, HTTPBasicCredentials
 from fastapi.templating import Jinja2Templates
 from pydantic import BaseModel, Field
 
-from . import db, qr as qrlogin, sync
+from . import accounts, db, qr as qrlogin, sync, webauth
 
 INTERVAL_MIN = int(os.environ.get("SYNC_INTERVAL_MIN", "30"))
-APP_USER = os.environ.get("APP_USER", "admin")
-APP_PASSWORD = os.environ.get("APP_PASSWORD", "")
 NEW_HOURS = int(os.environ.get("NEW_HOURS", "48"))  # durée d'affichage du badge « Nouveau »
 
 DONE_KEEP_DAYS = int(os.environ.get("DONE_KEEP_DAYS", "3"))  # « Terminé » : masqué quand l'échéance a plus de N jours
@@ -29,35 +25,34 @@ DONE_KEEP_DAYS = int(os.environ.get("DONE_KEEP_DAYS", "3"))  # « Terminé » : 
 NEW_SQL = f"(created_at >= datetime('now', '-{NEW_HOURS} hours')) AS is_new"
 
 templates = Jinja2Templates(directory=str(Path(__file__).parent / "templates"))
-security = HTTPBasic(auto_error=False)
 
 
-def auth(creds: HTTPBasicCredentials | None = Depends(security)):
-    if not APP_PASSWORD:
-        return
-    ok = creds is not None and secrets.compare_digest(
-        creds.username, APP_USER
-    ) and secrets.compare_digest(creds.password, APP_PASSWORD)
-    if not ok:
-        raise HTTPException(401, headers={"WWW-Authenticate": "Basic"})
+def _sync_user(uid):
+    with db.as_user(uid):
+        sync.run_sync()
 
 
 async def sync_loop():
     while True:
-        await asyncio.to_thread(sync.run_sync)
+        for uid in ([None] if db.LOCAL else accounts.user_ids()):
+            await asyncio.to_thread(_sync_user, uid)
         await asyncio.sleep(INTERVAL_MIN * 60)
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    db.init()
+    accounts.init()
+    for uid in ([None] if db.LOCAL else accounts.user_ids()):
+        with db.as_user(uid):
+            db.init()
     task = asyncio.create_task(sync_loop()) if INTERVAL_MIN > 0 else None
     yield
     if task:
         task.cancel()
 
 
-app = FastAPI(lifespan=lifespan, dependencies=[Depends(auth)])
+app = FastAPI(lifespan=lifespan, dependencies=[Depends(webauth.auth)])
+app.include_router(webauth.router)
 app.mount("/static", StaticFiles(directory=str(Path(__file__).parent / "static")), name="static")
 
 
@@ -152,6 +147,29 @@ def api_results():
     return results_data()
 
 
+@app.get("/manifest.webmanifest")
+def manifest(request: Request):
+    child = sync.child_name() if (db.LOCAL or request.state.user) else ""
+    name = "Devoirs" + (f" — {child}" if child else "")
+    icons = [
+        {"src": "/static/icons/icon-192.png", "sizes": "192x192", "type": "image/png"},
+        {"src": "/static/icons/icon-512.png", "sizes": "512x512", "type": "image/png"},
+        {"src": "/static/icons/maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable"},
+    ]
+    return JSONResponse(
+        {"name": name, "short_name": "Devoirs", "lang": "fr", "start_url": "/", "scope": "/", "display": "standalone",
+         "background_color": "#f4f6fb", "theme_color": "#3b82f6", "icons": icons},
+        media_type="application/manifest+json",
+    )
+
+
+@app.get("/sw.js")
+def service_worker():
+    # servi à la racine pour que son périmètre couvre toute l'app
+    return FileResponse(Path(__file__).parent / "static" / "sw.js", media_type="text/javascript",
+                        headers={"Cache-Control": "no-cache"})
+
+
 @app.get("/")
 def index(request: Request):
     with db.conn() as c:
@@ -162,7 +180,7 @@ def index(request: Request):
         request,
         "index.html",
         {"cards": cards, "results": results_data(), "lessons": lessons_data(), "settings": settings_data(), "avatars": avatar_list(), "last": last, "today": date.today().isoformat(),
-         "child": os.environ.get("CHILD_NAME", ""), "push": sync.push_enabled(),
+         "child": sync.child_name(), "account": (request.state.user or {}).get("login", ""), "push": sync.push_enabled(),
          "keep_days": DONE_KEEP_DAYS, "auth_problem": bool(last and last["kind"] == "auth"),
          "fonds": sorted(p.stem for p in (Path(__file__).parent / "static" / "fonds").glob("*.jpg"))},
     )
@@ -274,14 +292,15 @@ def reconnect(body: Reconnect, background: BackgroundTasks):
         data = base64.b64decode(body.image.split(",", 1)[-1], validate=True)
     except (binascii.Error, ValueError):
         raise HTTPException(400, "Image illisible.") from None
-    if not sync.LOCK.acquire(timeout=30):  # ne pas réécrire credentials.json pendant une synchro
+    lk = sync.lock()
+    if not lk.acquire(timeout=30):  # ne pas réécrire credentials.json pendant une synchro
         raise HTTPException(409, "Une synchronisation est en cours, réessayer dans un instant.")
     try:
         name = qrlogin.connect(qrlogin.decode_image(data), body.pin)
     except qrlogin.QRError as e:
         raise HTTPException(400, str(e)) from None
     finally:
-        sync.LOCK.release()
+        lk.release()
     background.add_task(sync.run_sync)  # première synchro tout de suite : lève la bannière et notifie « reconnecté »
     return {"ok": True, "name": name}
 

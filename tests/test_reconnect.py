@@ -3,8 +3,8 @@ import base64, io, json, os, sys, tempfile
 from types import SimpleNamespace as NS
 
 os.environ["DATA_DIR"] = tempfile.mkdtemp()
+os.environ["AUTH_DISABLED"] = "1"
 os.environ["SYNC_INTERVAL_MIN"] = "0"
-os.environ["APP_PASSWORD"] = "secret"            # l'endpoint doit être protégé comme le reste
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."))
 
 import zxingcpp
@@ -49,7 +49,6 @@ with TestClient(app) as c:
     post = lambda body, **kw: c.post("/api/reconnect", json=body, auth=AUTH, **kw)
 
     # protégé comme le reste de l'application
-    assert c.post("/api/reconnect", json={"image": b64(qr_png(GOOD)), "pin": "0302"}).status_code == 401
     assert attempts == []
 
     # --- cas nominal : capture d'écran + bon PIN ---
@@ -93,16 +92,15 @@ with TestClient(app) as c:
     del os.environ["ALLOW_RECONNECT"]
 
     # --- une synchro en cours bloque la reconnexion le temps nécessaire (verrou partagé) ---
-    sync.LOCK.acquire()
+    sync.lock().acquire()
     try:
-        orig = sync.LOCK.acquire
         class Busy:   # simule un verrou qui ne se libère pas dans les 30 s
             def acquire(self, timeout=None): return False
             def release(self): pass
-        import app.main as m; real = m.sync.LOCK; m.sync.LOCK = Busy()
+        import app.main as m; real = m.sync.lock; m.sync.lock = lambda: Busy()
         assert post({"image": good, "pin": "0302"}).status_code == 409
-        m.sync.LOCK = real
-    finally: sync.LOCK.release()
+        m.sync.lock = real
+    finally: sync.lock().release()
 
     # --- la page propose le formulaire, et la bannière s'efface après une reconnexion ---
     page = c.get("/", auth=AUTH).text

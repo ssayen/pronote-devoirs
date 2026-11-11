@@ -26,11 +26,11 @@ def main() -> None:
                     qr = json.load(f)
         else:
             qr = json.loads(raw)
-        os.makedirs(db.DATA_DIR, exist_ok=True)
+        os.makedirs(db.user_dir(), exist_ok=True)
         name = connect(qr, pin)
     except (QRError, ValueError) as e:
         sys.exit(f"Échec : {e}")
-    print(f"OK, connecté en tant que {name}. Identifiants écrits dans {db.DATA_DIR}.")
+    print(f"OK, connecté en tant que {name}. Identifiants écrits dans {db.user_dir()}.")
 
 
 if __name__ == "__main__":

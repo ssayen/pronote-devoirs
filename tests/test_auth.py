@@ -5,6 +5,7 @@ from http.server import BaseHTTPRequestHandler, HTTPServer
 from types import SimpleNamespace as NS
 
 os.environ["DATA_DIR"] = tempfile.mkdtemp()
+os.environ["AUTH_DISABLED"] = "1"
 os.environ["SYNC_INTERVAL_MIN"] = "0"
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."))
 

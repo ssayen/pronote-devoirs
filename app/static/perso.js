@@ -111,6 +111,11 @@
     { label: "Changer d'avatar", icon: () => (avatar ? src(avatar) : null), action: () => go("perso") },
     { label: "Apparence (clair / sombre)", icon: () => null, mark: "◐", action: () => { go("perso"); setTimeout(() => { const l = $("#look"); if (l) l.scrollIntoView({ behavior: "smooth", block: "start" }); }, 50); } },
   ];
+  const account = document.documentElement.dataset.account;
+  if (account) MENU.push({ label: `Se déconnecter (${account})`, icon: () => null, mark: "⎋", action: async () => {
+    try { await fetch("/logout", { method: "POST" }); if (window.caches) for (const k of await caches.keys()) await caches.delete(k); } catch (e) { /* hors ligne */ }
+    location.href = "/login";
+  } });
   const items = () => [...menu.querySelectorAll("[role=menuitem]")];
   function closeMenu(focusBtn) {
     if (menu.hidden) return;

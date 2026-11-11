@@ -44,7 +44,7 @@ export DATA_DIR="$PWD/$DEV"
 export SYNC_INTERVAL_MIN=0          # aucune synchro, même au démarrage
 export PUSH_TO_PRONOTE=0
 export ALLOW_RECONNECT=0            # jamais de connexion à Pronote depuis le poste de dev
-export APP_PASSWORD=""              # pas d'authentification en local (ne pas charger .env)
+export AUTH_DISABLED=1             # pas de compte en local : données à la racine de data-dev/ (ne pas charger .env)
 export CHILD_NAME="${CHILD_NAME:-}"
 
 # pas de Pronote en dev : moyennes et emploi du temps fictifs, seulement là où la base copiée n'en a pas

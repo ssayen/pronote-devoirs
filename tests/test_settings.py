@@ -2,6 +2,7 @@
 import os, sys, tempfile
 
 os.environ["DATA_DIR"] = tempfile.mkdtemp()
+os.environ["AUTH_DISABLED"] = "1"
 os.environ["SYNC_INTERVAL_MIN"] = "0"
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."))
 from fastapi.testclient import TestClient

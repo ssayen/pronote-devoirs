@@ -71,4 +71,4 @@ def seed() -> None:
 
 if __name__ == "__main__":
     seed()
-    print("Données de démonstration ajoutées là où il en manquait dans", db.DB_PATH)
+    print("Données de démonstration ajoutées là où il en manquait dans", db.db_path())

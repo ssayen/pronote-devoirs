@@ -2,9 +2,41 @@ import hashlib
 import os
 import shutil
 import sqlite3
+from contextlib import contextmanager
+from contextvars import ContextVar
 
 DATA_DIR = os.environ.get("DATA_DIR", "/data")
-DB_PATH = os.path.join(DATA_DIR, "devoirs.db")
+# AUTH_DISABLED=1 : mode local sans compte (développement, tests) ; les données sont à la racine de DATA_DIR.
+LOCAL = os.environ.get("AUTH_DISABLED", "0") == "1"
+
+# Utilisateur courant (une base, un jeton Pronote et des fichiers par utilisateur : DATA_DIR/users/<id>/)
+_user: ContextVar[int | None] = ContextVar("user", default=None)
+
+
+def set_user(uid: int | None):
+    return _user.set(uid)
+
+
+@contextmanager
+def as_user(uid: int | None):
+    tok = _user.set(uid)
+    try:
+        yield
+    finally:
+        _user.reset(tok)
+
+
+def user_dir() -> str:
+    uid = _user.get()
+    if uid is None:
+        if not LOCAL:
+            raise RuntimeError("Aucun utilisateur courant")
+        return DATA_DIR
+    return os.path.join(DATA_DIR, "users", str(uid))
+
+
+def db_path() -> str:
+    return os.path.join(user_dir(), "devoirs.db")
 
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS homework (
@@ -74,7 +106,7 @@ def content_key(subject: str, due: str, description: str) -> str:
 
 
 def conn() -> sqlite3.Connection:
-    c = sqlite3.connect(DB_PATH, timeout=30)
+    c = sqlite3.connect(db_path(), timeout=30)
     c.row_factory = sqlite3.Row
     return c
 
@@ -93,7 +125,7 @@ MIGRATIONS = {
 
 
 def init() -> None:
-    os.makedirs(DATA_DIR, exist_ok=True)
+    os.makedirs(user_dir(), exist_ok=True)
     with conn() as c:
         c.executescript(SCHEMA)
         cols = {r["name"] for r in c.execute("PRAGMA table_info(homework)")}
@@ -129,4 +161,4 @@ def _migrate_ids(c: sqlite3.Connection) -> None:
                 (f"{base}-0", r["subject"], r["description"], r["due_date"], r["done"], r["pending_push"],
                  r["status"], r["pronote_done"], r["files"], r["created_at"], r["updated_at"]),
             )
-    shutil.rmtree(os.path.join(DATA_DIR, "files"), ignore_errors=True)  # dossiers nommés d'après les anciens id
+    shutil.rmtree(os.path.join(user_dir(), "files"), ignore_errors=True)  # dossiers nommés d'après les anciens id

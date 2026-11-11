@@ -1,0 +1,108 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{{ 'Inscription' if mode == 'register' else 'Connexion' }}</title>
+<link rel="manifest" href="/manifest.webmanifest">
+<meta name="theme-color" content="#3b82f6">
+<link rel="apple-touch-icon" href="/static/icons/apple-touch-icon.png">
+<style>
+  :root { color-scheme: light; --bg:#f4f6fb; --fg:#1f2430; --panel:#ffffff; --line:#d5dbe8; --accent:#3b82f6; --late:#c0392b; }
+  @media (prefers-color-scheme: dark) { :root { color-scheme: dark; --bg:#12151c; --fg:#e6e9f0; --panel:#1b2030; --line:#2d3446; --late:#ff6b5b; } }
+  * { box-sizing:border-box; }
+  body { font-family:system-ui,sans-serif; margin:0; min-height:100vh; display:grid; place-items:center; padding:1rem; background:var(--bg); color:var(--fg); }
+  main { width:100%; max-width:26rem; background:var(--panel); border:1px solid var(--line); border-radius:14px; padding:1.4rem 1.4rem 1.2rem; }
+  .logo { width:56px; height:56px; border-radius:14px; display:block; margin:0 auto .6rem; }
+  h1 { font-size:1.3rem; text-align:center; margin:0 0 1rem; }
+  label { display:block; font-size:.88rem; margin:.8rem 0 .25rem; }
+  input { width:100%; font:inherit; padding:.55rem .65rem; border:1px solid var(--line); border-radius:8px; background:var(--bg); color:var(--fg); }
+  input:focus-visible, button:focus-visible { outline:2px solid var(--accent); outline-offset:2px; }
+  .hint { font-size:.8rem; opacity:.75; margin:.25rem 0 0; }
+  fieldset { border:1px solid var(--line); border-radius:10px; margin:1rem 0 0; padding:.2rem .8rem .8rem; }
+  legend { font-size:.88rem; padding:0 .3rem; }
+  button.go { width:100%; margin-top:1.1rem; font:inherit; font-weight:600; padding:.65rem; border:0; border-radius:8px; background:var(--accent); color:#fff; cursor:pointer; }
+  button.go:disabled { opacity:.6; cursor:wait; }
+  .err { color:var(--late); font-size:.9rem; min-height:1.2em; margin:.7rem 0 0; }
+  .alt { text-align:center; font-size:.9rem; margin:1rem 0 0; }
+  a { color:var(--accent); }
+  #pin { width:8rem; letter-spacing:.4em; text-align:center; font-size:1.2rem; }
+</style>
+</head>
+<body>
+<main>
+  <img class="logo" src="/static/icons/icon-192.png" alt="">
+{% if mode == 'login' %}
+  <h1>Connexion</h1>
+  <form id="f" autocomplete="on">
+    <label for="login">Identifiant</label>
+    <input id="login" name="username" autocomplete="username" autocapitalize="none" required autofocus>
+    <label for="pw">Mot de passe</label>
+    <input id="pw" name="password" type="password" autocomplete="current-password" required>
+    <p class="err" id="err" role="alert"></p>
+    <button class="go" type="submit">Se connecter</button>
+  </form>
+  <p class="alt">{% if open %}Pas encore de compte ? <a href="/register">S'inscrire</a>{% else %}Les inscriptions sont fermées.{% endif %}</p>
+{% elif not open %}
+  <h1>Inscription</h1>
+  <p>Les inscriptions sont fermées.</p>
+  <p class="alt"><a href="/login">Retour à la connexion</a></p>
+{% else %}
+  <h1>Créer un compte</h1>
+  <form id="f" autocomplete="on">
+    <label for="login">Identifiant</label>
+    <input id="login" name="username" autocomplete="username" autocapitalize="none" required autofocus>
+    <p class="hint">3 à 32 caractères : lettres, chiffres, point, tiret.</p>
+    <label for="pw">Mot de passe</label>
+    <input id="pw" name="password" type="password" autocomplete="new-password" minlength="8" required>
+    <p class="hint">8 caractères minimum.</p>
+{% if invite %}
+    <label for="invite">Code d'invitation</label>
+    <input id="invite" autocomplete="off" required>
+{% endif %}
+{% if can_qr %}
+    <fieldset>
+      <legend>Connexion à Pronote{% if not qr_required %} (facultatif){% endif %}</legend>
+      {% if legacy %}<p class="hint">Les données et la connexion Pronote existantes seront rattachées à ce compte.</p>{% endif %}
+      <p class="hint">Dans Pronote : « Application mobile » → générer un QR code avec un PIN à 4 chiffres, en faire une capture d'écran et la déposer ici.</p>
+      <label for="qr">Capture du QR code</label>
+      <input id="qr" type="file" accept="image/*"{% if qr_required %} required{% endif %}>
+      <label for="pin">PIN (4 chiffres)</label>
+      <input id="pin" inputmode="numeric" maxlength="4" pattern="\d{4}" autocomplete="off"{% if qr_required %} required{% endif %}>
+      <label for="child">Prénom de l'enfant (compte parent, facultatif)</label>
+      <input id="child" autocomplete="off">
+      <p class="hint">À remplir si le compte Pronote suit plusieurs enfants : nom exact dans Pronote.</p>
+    </fieldset>
+{% endif %}
+    <p class="err" id="err" role="alert"></p>
+    <button class="go" type="submit">Créer mon compte</button>
+  </form>
+  <p class="alt">Déjà un compte ? <a href="/login">Se connecter</a></p>
+{% endif %}
+</main>
+<script>
+const f = document.getElementById("f"), err = document.getElementById("err");
+const val = id => (document.getElementById(id) || {}).value || "";
+const fileData = file => new Promise((ok, ko) => { const r = new FileReader(); r.onload = () => ok(r.result); r.onerror = ko; r.readAsDataURL(file); });
+if (f) f.onsubmit = async ev => {
+  ev.preventDefault();
+  const btn = f.querySelector("button.go"); btn.disabled = true; err.textContent = "";
+  try {
+    const reg = {{ 'true' if mode == 'register' else 'false' }};
+    const body = { login: val("login"), password: val("pw") };
+    if (reg) {
+      body.invite = val("invite"); body.pin = val("pin"); body.child = val("child");
+      const file = document.getElementById("qr") && document.getElementById("qr").files[0];
+      if (file) body.image = await fileData(file);
+    }
+    const r = await fetch(reg ? "/api/register" : "/api/login", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+    if (r.ok) { location.href = "/"; return; }
+    let m = "Erreur " + r.status;
+    try { const j = await r.json(); if (typeof j.detail === "string") m = j.detail; else if (j.detail) m = "Données invalides, vérifier les champs."; } catch (e) {}
+    err.textContent = m;
+  } catch (e) { err.textContent = "Réseau indisponible, réessayer."; }
+  btn.disabled = false;
+};
+</script>
+</body>
+</html>

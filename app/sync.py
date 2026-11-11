@@ -9,11 +9,31 @@ import pronotepy
 
 from . import db
 
-LOCK = threading.Lock()
+_LOCKS: dict = {}
+_LOCKS_GUARD = threading.Lock()
+
+
+def lock() -> threading.Lock:
+    """Verrou de synchro de l'utilisateur courant (une synchro à la fois par utilisateur)."""
+    key = db.user_dir()
+    with _LOCKS_GUARD:
+        return _LOCKS.setdefault(key, threading.Lock())
 
 
 def creds_path() -> str:
-    return os.path.join(db.DATA_DIR, "credentials.json")
+    return os.path.join(db.user_dir(), "credentials.json")
+
+
+def child_name() -> str:
+    """Enfant suivi (compte parent) : réglage de l'utilisateur, à défaut la variable CHILD_NAME (ancienne installation)."""
+    try:
+        with db.conn() as c:
+            r = c.execute("SELECT value FROM settings WHERE key = 'child'").fetchone()
+        if r and r["value"]:
+            return r["value"]
+    except Exception:  # noqa: BLE001
+        pass
+    return os.environ.get("CHILD_NAME", "")
 
 
 def save_creds(client) -> None:
@@ -49,7 +69,7 @@ def get_client():
     if not client.logged_in:
         raise TokenExpired("Connexion refusée : jeton expiré, régénérer le QR code")
     save_creds(client)
-    child = os.environ.get("CHILD_NAME")
+    child = child_name()
     if child:
         client.set_child(child)
     return client
@@ -64,7 +84,7 @@ MAX_FILE_BYTES = 25 * 1024 * 1024
 
 
 def files_dir() -> str:
-    return os.path.join(db.DATA_DIR, "files")
+    return os.path.join(db.user_dir(), "files")
 
 
 def _safe_name(name: str) -> str:
@@ -258,7 +278,8 @@ def notify(title: str, message: str) -> str | None:
 
 
 def run_sync() -> None:
-    if not LOCK.acquire(blocking=False):
+    lk = lock()
+    if not lk.acquire(blocking=False):
         return  # synchro déjà en cours
     try:
         try:
@@ -284,4 +305,4 @@ def run_sync() -> None:
             c.execute("INSERT INTO sync_log (ok, kind, message) VALUES (?, ?, ?)", (int(kind == "ok"), kind, msg))
             c.execute("DELETE FROM sync_log WHERE id NOT IN (SELECT id FROM sync_log ORDER BY id DESC LIMIT 200)")
     finally:
-        LOCK.release()
+        lk.release()

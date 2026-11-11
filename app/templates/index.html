@@ -1,9 +1,15 @@
 <!doctype html>
-<html lang="fr"{% if settings.theme in ('light', 'dark') %} data-theme="{{ settings.theme }}"{% endif %}>
+<html lang="fr"{% if account %} data-account="{{ account }}"{% endif %}{% if settings.theme in ('light', 'dark') %} data-theme="{{ settings.theme }}"{% endif %}>
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Devoirs{{ ' — ' + child if child }}</title>
+<link rel="manifest" href="/manifest.webmanifest" crossorigin="use-credentials">
+<meta name="theme-color" content="#3b82f6">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Devoirs">
+<link rel="apple-touch-icon" href="/static/icons/apple-touch-icon.png">
 <style>
   :root { color-scheme: light; --bg:#f4f6fb; --fg:#1f2430; --panel:#ffffff; --col:#e9edf6; --line:#d5dbe8; --late:#c0392b;
           --todo:#3b82f6; --doing:#f59e0b; --done:#22c55e; --shadow:#1f243026; }
@@ -653,5 +659,6 @@ render();
 <script src="/static/timetable.js"></script>
 <script src="/static/perso.js"></script>
 <script>initViews();</script>
+<script>if ("serviceWorker" in navigator) navigator.serviceWorker.register("/sw.js").catch(() => {});</script>
 </body>
 </html>

@@ -17,7 +17,7 @@ Parent d'une collégienne/lycéenne : récupérer automatiquement ses devoirs de
 app/db.py          schéma SQLite (homework, sync_log), DATA_DIR=/data
 app/sync.py        get_client() (injectable), _sync(), run_sync() avec verrou
 app/login.py       python -m app.login <qr.json|chemin> <PIN> -> écrit credentials.json
-app/main.py        FastAPI : /, /toggle/{id}, /sync, /api/homework ; boucle de synchro ; Basic auth optionnelle
+app/main.py        FastAPI : /, /toggle/{id}, /sync, /api/homework ; boucle de synchro (tous les comptes)
 app/templates/index.html
 tests/test_app.py  test avec faux client Pronote (pas de réseau)
 Dockerfile, docker-compose.yml, requirements.txt, README.md
@@ -28,7 +28,7 @@ Logique de synchro (`app/sync.py`) :
 3. **Pull ensuite** : insert/update par `hw.id` ; si `pending_push` est encore à 1, l'état local est conservé.
 4. Rien n'est jamais supprimé de la base. Résultat journalisé dans `sync_log` (affiché en bas de page, rouge si erreur).
 - Déclencheurs : démarrage, toutes les `SYNC_INTERVAL_MIN` min (0 = désactivé), après chaque bascule, bouton « Synchroniser maintenant ».
-- Config par env : `SYNC_INTERVAL_MIN`, `APP_USER`, `APP_PASSWORD` (vide = pas d'auth), `CHILD_NAME` (compte parent), `DATA_DIR`, `TZ`.
+- Config par env : `SYNC_INTERVAL_MIN`, `INVITE_CODE` (code d'inscription ; vide = seul le 1er compte s'inscrit), `AUTH_DISABLED=1` (dev/tests : pas de compte), `CHILD_NAME` (ancienne install.), `DATA_DIR`, `TZ`.
 
 ## Ce qui n'a PAS été vérifié (à faire en premier)
 1. **Connexion réelle** : `pronotepy.Client.qrcode_login(qr, pin, uuid)` dans `app/login.py` — la signature dépend de la version de pronotepy (vérifier `pip show pronotepy` et la doc). Alternative : `python -m pronotepy.create_login`.
