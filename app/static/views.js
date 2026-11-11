@@ -2,7 +2,7 @@
 // Chaque section enregistre { el, draw, show? } dans VIEWS ; draw() n'est appelé qu'à la première ouverture.
 // La section ouverte est dans l'adresse (#resultats, #edt, #perso) : le bouton « retour » du navigateur fonctionne.
 const VIEWS = {};
-const HASH = { resultats: "#resultats", edt: "#edt", perso: "#perso" };
+const HASH = { resultats: "#resultats", edt: "#edt", perso: "#perso", objectifs: "#objectifs" };
 const NAV = { current: null, previous: null };   // section affichée et section précédente
 let showView = () => {};
 

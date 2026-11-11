@@ -35,6 +35,7 @@ async def auth(request: Request):
     """Dépendance globale : identifie l'utilisateur (cookie) et fixe son contexte de données."""
     if db.LOCAL:
         request.state.user = None
+        request.state.readonly = False
         return
     user = accounts.user_from_token(request.cookies.get(COOKIE))
     request.state.user = user
@@ -228,7 +229,7 @@ def api_register(body: RegisterIn, request: Request, background: BackgroundTasks
 def parent_invite(request: Request):
     """L'élève génère un code de liaison pour un parent (valable 7 jours, usage unique)."""
     user = request.state.user
-    if user is None or user["role"] != "student":
+    if user is None or user["role"] not in ("student", "admin"):
         raise HTTPException(403, "Réservé aux comptes élèves.")
     return {"code": accounts.new_invite(user["id"]), "days": accounts.INVITE_DAYS, "parents": accounts.parents_of(user["id"])}
 

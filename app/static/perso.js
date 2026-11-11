@@ -113,7 +113,7 @@
   ];
   const account = document.documentElement.dataset.account, role = document.documentElement.dataset.role;
   if (document.documentElement.hasAttribute("data-readonly")) MENU.length = 0;   // parent : pas de personnalisation de l'élève
-  if (role === "student") MENU.push({ label: "Inviter un parent", icon: () => null, mark: "👪", action: async () => {
+  if (role === "student" || role === "admin") MENU.push({ label: "Inviter un parent", icon: () => null, mark: "👪", action: async () => {
     try {
       const r = await fetch("/api/parent-invite", { method: "POST" });
       if (!r.ok) throw new Error(r.status);

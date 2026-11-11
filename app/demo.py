@@ -5,7 +5,7 @@ Usage : DATA_DIR=data-dev python -m app.demo
 """
 from datetime import date, timedelta
 
-from . import db
+from . import db, game
 
 SUBJECTS = [  # matière, élève, classe, min, max
     ("FRANCAIS", 14.2, 12.1, 6.5, 17.8), ("MATHEMATIQUES", 16.8, 11.4, 3.2, 19.5), ("HISTOIRE-GEOGRAPHIE", 13.1, 12.9, 7.0, 18.0),
@@ -58,6 +58,19 @@ def seed_results() -> None:
                       (name, pos, None, None, round(14.6 + shift, 2), 12.7))
 
 
+def seed_grades() -> None:
+    """Quelques notes récentes (dont des ≥ 16) pour voir points, missions et paquets en développement."""
+    notes = [("MATHEMATIQUES", 17.5, 3), ("ANGLAIS LV1", 19, 5), ("FRANCAIS", 12.5, 6), ("SCIENCES VIE & TERRE", 16, 9),
+             ("ARTS PLASTIQUES", 20, 12), ("HISTOIRE-GEOGRAPHIE", 14, 15), ("MATHEMATIQUES", 18, 22), ("ITALIEN LV2", 16.5, 30)]
+    with db.conn() as c:
+        for i, (subj, g, ago) in enumerate(notes):
+            d = (date.today() - timedelta(days=ago)).isoformat()
+            c.execute("INSERT OR REPLACE INTO grades (id, period, subject, date, grade, out_of, coef, class_avg, max) VALUES (?,?,?,?,?,20,1,12.5,18)",
+                      (f"demo{i}", "Trimestre 2", subj, d, g))
+        c.execute("INSERT OR REPLACE INTO settings (key, value) VALUES ('game_since', ?)", ((date.today() - timedelta(days=20)).isoformat(),))
+        game.update(c)
+
+
 def seed() -> None:
     db.init()
     with db.conn() as c:
@@ -67,6 +80,10 @@ def seed() -> None:
         seed_results()
     if not has_lessons:
         seed_lessons()
+    with db.conn() as c:
+        has_grades = c.execute("SELECT 1 FROM grades LIMIT 1").fetchone()
+    if not has_grades:
+        seed_grades()
 
 
 if __name__ == "__main__":

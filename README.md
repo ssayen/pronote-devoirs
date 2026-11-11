@@ -42,3 +42,16 @@ les garde en local et renvoie le statut « terminé » vers Pronote.
 - Un **compte élève** a ses propres données et son propre QR code Pronote (espace élève). Un **compte parent** est lié à un élève : il consulte ses devoirs, résultats et emploi du temps en lecture seule.
 - Liaison : à l'inscription, le parent est rattaché automatiquement à l'élève dont l'identifiant Pronote figure parmi ses enfants (à défaut : même nom, classe et établissement). Secours : l'élève génère un code (menu de l'avatar → « Inviter un parent », valable 7 jours, usage unique) que le parent saisit en plus de son QR code. L'élève doit s'être connecté avec son QR code avant.
 - Pour passer un compte existant d'un jeton parent à un jeton élève sans perdre l'historique : « Reconnecter Pronote » avec le QR code de l'élève (les cartes, l'avatar et les réglages sont conservés).
+
+## Objectifs (gamification)
+
+- **Points :** chaque note de 16 ou plus (ramenée sur 20) rapporte 1 point (16-17), 2 (18-19) ou 3 (20) ; une mission réussie rapporte 1 à 3 points selon sa difficulté. Seules les notes postérieures à l'activation comptent (pas de rattrapage de l'historique). Le journal `points` est la source de vérité, une référence unique par événement évite tout doublon.
+- **Niveaux :** paliers fixes de 10 points (`game.POINTS_PER_LEVEL`). Chaque niveau gagné donne un paquet à ouvrir ; la récompense est tirée au hasard dans une liste provisoire (`game.REWARDS`) : les vraies récompenses seront choisies par le parent.
+- **Missions :** 3 actives en même temps, tirées au hasard, valables 21 jours : améliorer la moyenne d'une matière (la moyenne de départ est mémorisée), dépasser la moyenne de la classe, obtenir N notes d'un niveau donné (notes postérieures au début de la mission).
+- **Affichage :** onglet « Objectifs », niveau et barre de progression sur l'avatar (le parent consulte, sans ouvrir les paquets).
+
+### Compte administrateur (tests)
+
+- `docker compose exec app python -m app.admin create <identifiant>` (le mot de passe est demandé) crée un compte qui se comporte comme un élève, sans QR code ni synchro Pronote, avec des données de démonstration (moyennes, emploi du temps, notes).
+- Dans « Objectifs », une section « Outils de test » permet de s'octroyer 1, 3, 10 ou 25 points (niveaux et paquets suivent). Il peut aussi générer un code de liaison pour tester un compte parent.
+- Ce rôle ne peut pas être demandé depuis la page d'inscription.

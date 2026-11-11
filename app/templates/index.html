@@ -22,7 +22,8 @@
   [hidden] { display:none !important; }
   /* compte parent : consultation seulement */
   html[data-readonly] #add, html[data-readonly] [data-add], html[data-readonly] .card .mv, html[data-readonly] #d-edit, html[data-readonly] #d-del,
-  html[data-readonly] .sync form, html[data-readonly] [data-reconnect] { display:none !important; }
+  html[data-readonly] .sync form, html[data-readonly] [data-reconnect],
+  html[data-role="admin"] .sync form, html[data-role="admin"] [data-reconnect] { display:none !important; }
   body { font-family: system-ui, sans-serif; margin: 0; padding: 1rem; overflow-wrap:anywhere; background:var(--bg); color:var(--fg); }
   .tools { display:flex; align-items:center; gap:.8rem; }
   /* trois zones : titre | onglets | outils. Les onglets restent centrés quel que soit le contenu des outils (pas de décalage au changement d'onglet) */
@@ -307,6 +308,47 @@
   @media (prefers-reduced-motion: reduce) { .avatar, .av-face, .th-opt { transition:none !important; } .menu { animation:none; } }
   .toast { position:fixed; bottom:1rem; left:50%; transform:translateX(-50%); background:#333; color:#fff; padding:.5rem 1rem; border-radius:6px; display:none; }
   @media (max-width: 560px) { .toast { z-index:200; bottom:9.5rem; } }   /* au-dessus des barres de colonnes collées en bas */
+
+  /* niveau sur l'avatar */
+  .avwrap .lvl { position:absolute; right:-.35rem; top:-.35rem; min-width:1.35rem; height:1.35rem; padding:0 .3rem; border-radius:999px; display:grid; place-items:center;
+                 background:var(--todo); color:#fff; font-size:.78rem; font-weight:800; line-height:1; border:2px solid var(--bg); pointer-events:none; }
+  .avwrap .lvl.gift { background:var(--doing); animation:giftpulse 1.6s ease-in-out infinite; }
+  @keyframes giftpulse { 50% { transform:scale(1.18); } }
+  .avwrap .xp { position:absolute; left:.3rem; right:.3rem; bottom:-.55rem; height:.4rem; border-radius:999px; background:var(--line); overflow:hidden; pointer-events:none; }
+  .avwrap .xp i { display:block; height:100%; background:var(--done); border-radius:inherit; transition:width .5s; }
+  /* onglet Objectifs */
+  #goals { max-width:56rem; margin:0 auto; display:grid; gap:1.1rem; }
+  #goals h2 { font-size:1.05rem; margin:0 0 .6rem; }
+  #goals .g-level { display:flex; gap:1.2rem; align-items:center; background:var(--panel); border:1px solid var(--line); border-radius:16px; padding:1rem 1.2rem; }
+  #goals .g-big { flex:none; width:5.2rem; height:5.2rem; border-radius:50%; display:grid; place-items:center; align-content:center; background:var(--todo); color:#fff; }
+  #goals .g-big small { font-size:.7rem; text-transform:uppercase; letter-spacing:.06em; opacity:.9; }
+  #goals .g-big b { font-size:2.2rem; line-height:1; }
+  #goals .g-side { flex:1; min-width:0; }
+  #goals .g-line { font-weight:700; margin-bottom:.4rem; }
+  #goals .g-sub { font-size:.85rem; opacity:.75; margin-top:.35rem; }
+  #goals .meter { height:.7rem; border-radius:999px; background:var(--line); overflow:hidden; }
+  #goals .meter i { display:block; height:100%; border-radius:inherit; background:var(--done); transition:width .5s; }
+  #goals .g-sec { background:var(--panel); border:1px solid var(--line); border-radius:16px; padding:1rem 1.2rem; }
+  #goals .g-empty { margin:0; opacity:.75; font-size:.92rem; }
+  #goals .g-pack { display:flex; align-items:center; gap:.8rem; padding:.4rem 0; }
+  #goals .g-gift { font-size:1.6rem; } #goals .g-txt { flex:1; font-weight:600; }
+  #goals .g-grid { display:grid; grid-template-columns:repeat(auto-fill, minmax(15rem, 1fr)); gap:.8rem; }
+  #goals .g-mission { border:1px solid var(--line); border-radius:12px; padding:.8rem .9rem; background:var(--bg); }
+  #goals .g-mission.expired { opacity:.6; } #goals .g-mission.done { border-color:var(--done); }
+  #goals .g-mtop { display:flex; gap:.6rem; justify-content:space-between; align-items:flex-start; margin-bottom:.55rem; }
+  #goals .g-mlabel { font-weight:600; font-size:.95rem; }
+  #goals .g-pts { flex:none; background:color-mix(in srgb, var(--doing) 25%, transparent); border-radius:999px; padding:.1rem .55rem; font-weight:700; font-size:.82rem; }
+  #goals .g-adm { display:flex; flex-wrap:wrap; align-items:center; gap:.5rem; } #goals .g-admin { border-style:dashed; }
+  #goals .g-past { margin-top:.9rem; } #goals .g-past summary { cursor:pointer; font-size:.9rem; margin-bottom:.6rem; }
+  #goals .g-list { margin:0; padding:0; list-style:none; display:grid; gap:.35rem; font-size:.92rem; }
+  #goals .g-list b { color:var(--done); margin-right:.2rem; }
+  dialog.g-reveal { border:none; border-radius:18px; padding:0; background:var(--panel); color:var(--fg); box-shadow:0 20px 60px #0006; max-width:min(22rem, 92vw); }
+  dialog.g-reveal::backdrop { background:#0009; }
+  .g-rbody { padding:1.6rem 1.6rem 1.3rem; text-align:center; animation:pop .45s cubic-bezier(.2,1.4,.4,1); }
+  @keyframes pop { from { transform:scale(.6); opacity:0; } }
+  .g-confetti { font-size:3.2rem; } .g-reward { font-size:1.5rem; font-weight:800; margin:.2rem 0 1.2rem; }
+  @media (max-width:560px) { #goals .g-level { gap:.8rem; padding:.8rem; } #goals .g-big { width:4.2rem; height:4.2rem; } #goals .g-big b { font-size:1.8rem; } }
+  @media (prefers-reduced-motion: reduce) { .avwrap .lvl.gift, .g-rbody { animation:none; } #goals .meter i, .avwrap .xp i { transition:none; } }
 </style>
 </head>
 <body>
@@ -316,6 +358,7 @@
     <button role="tab" id="tab-devoirs" aria-selected="true" aria-controls="v-devoirs" data-view="devoirs">Devoirs</button>
     <button role="tab" id="tab-resultats" aria-selected="false" aria-controls="results" data-view="resultats">Résultats</button>
     <button role="tab" id="tab-edt" aria-selected="false" aria-controls="timetable" data-view="edt">Emploi du temps</button>
+    <button role="tab" id="tab-objectifs" aria-selected="false" aria-controls="goals" data-view="objectifs">Objectifs</button>
   </div>
   <div class="tools"><div class="tools-main"><span class="alert" id="late"></span><button class="btn primary" id="add">➕ Nouvelle carte</button></div><div class="avwrap"><button class="avatar empty" id="avatar" type="button" title="Mon profil" aria-haspopup="menu" aria-expanded="false" aria-controls="avatar-menu"><span>?</span></button>
     <div class="menu" id="avatar-menu" role="menu" aria-label="Mon profil" hidden></div></div></div>
@@ -339,6 +382,7 @@
 
 <main id="results" role="tabpanel" aria-labelledby="tab-resultats" hidden></main>
 <main id="timetable" role="tabpanel" aria-labelledby="tab-edt" hidden></main>
+<main id="goals" role="tabpanel" aria-labelledby="tab-objectifs" hidden></main>
 <main id="v-perso" aria-label="Personnalisation" hidden></main>
 
 <dialog id="detail">
@@ -408,6 +452,7 @@
 const CARDS = {{ cards|tojson }};
 const TODAY = {{ today|tojson }};
 const RESULTS = {{ results|tojson }};
+const GAME = {{ game|tojson }};
 const LESSONS = {{ lessons|tojson }};
 const SETTINGS = {{ settings|tojson }};
 const AVATARS = {{ avatars|tojson }};
@@ -664,6 +709,7 @@ render();
 <script src="/static/views.js"></script>
 <script src="/static/results.js"></script>
 <script src="/static/timetable.js"></script>
+<script src="/static/objectifs.js"></script>
 <script src="/static/perso.js"></script>
 <script>initViews();</script>
 <script>if ("serviceWorker" in navigator) navigator.serviceWorker.register("/sw.js").catch(() => {});</script>

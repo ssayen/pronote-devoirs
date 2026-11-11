@@ -82,9 +82,11 @@ def count() -> int:
         return c.execute("SELECT COUNT(*) FROM users").fetchone()[0]
 
 
-def user_ids() -> list[int]:
+def user_ids(roles: tuple = ("student",)) -> list[int]:
+    """Comptes ayant leurs propres données. Par défaut les élèves : eux seuls ont un jeton Pronote à synchroniser."""
+    marks = ",".join("?" * len(roles))
     with _conn() as c:
-        return [r["id"] for r in c.execute("SELECT id FROM users WHERE role = 'student' ORDER BY id")]
+        return [r["id"] for r in c.execute(f"SELECT id FROM users WHERE role IN ({marks}) ORDER BY id", roles)]
 
 
 def create(login: str, pw: str, role: str = "student", student_id: int | None = None) -> int | None:

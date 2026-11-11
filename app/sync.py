@@ -8,7 +8,7 @@ from datetime import date, timedelta
 
 import pronotepy
 
-from . import db
+from . import db, game
 
 _LOCKS: dict = {}
 _LOCKS_GUARD = threading.Lock()
@@ -202,6 +202,34 @@ def _sync_results(client) -> int:
     return n
 
 
+def _sync_grades(client) -> int:
+    """Notes individuelles (ramenées sur 20) des périodes commencées. Les notes déjà connues sont conservées. Retourne le nombre lu."""
+    today = date.today()
+    n = 0
+    for p in client.periods:
+        start = getattr(p, "start", None)
+        start = start.date() if start is not None and hasattr(start, "date") else start
+        if start is not None and start > today:
+            continue
+        seen: dict[str, int] = {}
+        rows = []
+        for g in p.grades:
+            val = _num(g.grade, g.out_of)
+            if val is None:  # absent, dispensé, non noté…
+                continue
+            d = g.date.isoformat() if hasattr(g.date, "isoformat") else str(g.date)
+            base = db.content_key(g.subject.name, d, f"{g.grade}/{g.out_of}x{g.coefficient}|{g.comment or ''}")
+            k = seen.get(base, 0)
+            seen[base] = k + 1
+            rows.append((f"{base}-{k}", p.name, g.subject.name, d, val, _num(g.out_of), _num(g.coefficient),
+                         _num(g.average, g.out_of), _num(g.max, g.out_of), g.comment or None))
+        with db.conn() as c:
+            c.executemany("INSERT OR REPLACE INTO grades (id, period, subject, date, grade, out_of, coef, class_avg, max, comment) "
+                          "VALUES (?,?,?,?,?,?,?,?,?,?)", rows)
+        n += len(rows)
+    return n
+
+
 def _sync_lessons(client) -> int:
     """Emploi du temps : de la semaine précédente à 5 semaines devant. Remplace cette fenêtre
     (un cours annulé ou déplacé doit disparaître / changer), sans toucher à l'historique plus ancien."""
@@ -220,6 +248,16 @@ def _sync_lessons(client) -> int:
         c.executemany("INSERT OR REPLACE INTO lessons (id, start, end, subject, teacher, room, status, canceled, test, detention, outing, memo) "
                       "VALUES (?,?,?,?,?,?,?,?,?,?,?,?)", rows)
     return len(rows)
+
+
+def _update_game() -> str:
+    """Points, missions et paquets après la synchro ; ne doit jamais faire échouer celle-ci."""
+    try:
+        with db.conn() as c:
+            game.update(c)
+            return f", niveau {game.summary(c)['level']}"
+    except Exception as e:  # noqa: BLE001
+        return f" (objectifs non mis à jour : {type(e).__name__})"
 
 
 def _sync() -> str:
@@ -293,6 +331,11 @@ def _sync() -> str:
         msg += f", {_sync_lessons(client)} cours"
     except Exception as e:  # noqa: BLE001
         msg += f" (emploi du temps non lu : {type(e).__name__})"
+    try:
+        msg += f", {_sync_grades(client)} notes"
+    except Exception as e:  # noqa: BLE001
+        msg += f" (notes non lues : {type(e).__name__})"
+    msg += _update_game()
     return msg
 
 

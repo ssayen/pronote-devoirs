@@ -85,6 +85,45 @@ CREATE TABLE IF NOT EXISTS lessons (      -- emploi du temps ; dates locales « 
     outing    INTEGER NOT NULL DEFAULT 0,
     memo      TEXT
 );
+CREATE TABLE IF NOT EXISTS grades (       -- notes individuelles ; grade / class_avg / max ramenés sur 20
+    id        TEXT PRIMARY KEY,           -- clé de contenu (les identifiants Pronote changent à chaque connexion)
+    period    TEXT NOT NULL,
+    subject   TEXT NOT NULL,
+    date      TEXT NOT NULL,
+    grade     REAL NOT NULL,
+    out_of    REAL,
+    coef      REAL,
+    class_avg REAL,
+    max       REAL,
+    comment   TEXT
+);
+CREATE TABLE IF NOT EXISTS points (       -- journal des points : on n'y fait qu'ajouter ; « ref » unique = une seule attribution par événement
+    id     INTEGER PRIMARY KEY AUTOINCREMENT,
+    at     TEXT NOT NULL DEFAULT (datetime('now')),
+    kind   TEXT NOT NULL,                 -- grade | mission
+    ref    TEXT NOT NULL UNIQUE,
+    points INTEGER NOT NULL,
+    label  TEXT NOT NULL
+);
+CREATE TABLE IF NOT EXISTS missions (
+    id         INTEGER PRIMARY KEY AUTOINCREMENT,
+    kind       TEXT NOT NULL,             -- avg_up | beat_class | good_grades
+    subject    TEXT,
+    params     TEXT NOT NULL DEFAULT '{}',   -- objectif (ex. {"delta": 1})
+    baseline   TEXT NOT NULL DEFAULT '{}',   -- état au démarrage (ex. {"avg": 12.4, "period": "Trimestre 1"})
+    points     INTEGER NOT NULL,
+    label      TEXT NOT NULL,
+    started_at TEXT NOT NULL,             -- AAAA-MM-JJ : seules les notes postérieures comptent
+    expires_at TEXT NOT NULL,
+    status     TEXT NOT NULL DEFAULT 'active',   -- active | done | expired
+    done_at    TEXT
+);
+CREATE TABLE IF NOT EXISTS packs (        -- un paquet par niveau atteint
+    level      INTEGER PRIMARY KEY,
+    created_at TEXT NOT NULL DEFAULT (datetime('now')),
+    opened_at  TEXT,
+    reward     TEXT
+);
 CREATE TABLE IF NOT EXISTS settings (     -- personnalisation de l'interface (clé / valeur), conservée dans le volume de données
     key   TEXT PRIMARY KEY,
     value TEXT NOT NULL

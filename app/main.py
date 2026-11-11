@@ -15,7 +15,7 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from pydantic import BaseModel, Field
 
-from . import accounts, db, qr as qrlogin, sync, webauth
+from . import accounts, db, game, qr as qrlogin, sync, webauth
 
 INTERVAL_MIN = int(os.environ.get("SYNC_INTERVAL_MIN", "30"))
 NEW_HOURS = int(os.environ.get("NEW_HOURS", "48"))  # durée d'affichage du badge « Nouveau »
@@ -42,7 +42,7 @@ async def sync_loop():
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     accounts.init()
-    for uid in ([None] if db.LOCAL else accounts.user_ids()):
+    for uid in ([None] if db.LOCAL else accounts.user_ids(("student", "admin"))):
         with db.as_user(uid):
             db.init()
     task = asyncio.create_task(sync_loop()) if INTERVAL_MIN > 0 else None
@@ -142,6 +142,38 @@ def api_lessons():
     return lessons_data()
 
 
+@app.get("/api/game")
+def api_game(request: Request):
+    with db.conn() as c:
+        if not request.state.readonly:  # un parent consulte sans rien modifier
+            game.update(c)
+        return game.overview(c)
+
+
+class PointsIn(BaseModel):
+    points: int = Field(ge=1, le=100)
+
+
+@app.post("/api/admin/points")
+def admin_points(body: PointsIn, request: Request):
+    """Outil de test : le compte administrateur s'octroie des points (les niveaux et paquets suivent)."""
+    if (request.state.user or {}).get("role") != "admin":
+        raise HTTPException(403, "Réservé au compte administrateur.")
+    with db.conn() as c:
+        game.award(c, "admin", f"admin:{uuid.uuid4().hex}", body.points, "Points ajoutés (test)")
+        game.ensure_packs(c)
+        return game.summary(c)
+
+
+@app.post("/api/packs/{level}/open")
+def open_pack(level: int):
+    with db.conn() as c:
+        reward = game.open_pack(c, level)
+    if reward is None:
+        raise HTTPException(404, "Paquet introuvable ou déjà ouvert.")
+    return {"level": level, "reward": reward}
+
+
 @app.get("/api/results")
 def api_results():
     return results_data()
@@ -181,11 +213,12 @@ def index(request: Request):
     with db.conn() as c:
         rows = c.execute(f"SELECT *, {NEW_SQL} FROM homework ORDER BY due_date, subject").fetchall()
         last = c.execute("SELECT * FROM sync_log ORDER BY id DESC LIMIT 1").fetchone()
+        gm = game.summary(c)
     cards = [card_dict(r) for r in rows]
     return templates.TemplateResponse(
         request,
         "index.html",
-        {"cards": cards, "results": results_data(), "lessons": lessons_data(), "settings": settings_data(), "avatars": avatar_list(), "last": last, "today": date.today().isoformat(),
+        {"cards": cards, "results": results_data(), "game": gm, "lessons": lessons_data(), "settings": settings_data(), "avatars": avatar_list(), "last": last, "today": date.today().isoformat(),
          "child": sync.display_name(), "account": (request.state.user or {}).get("login", ""),
          "role": (request.state.user or {}).get("role", "student"), "readonly": getattr(request.state, "readonly", False), "push": sync.push_enabled(),
          "keep_days": DONE_KEEP_DAYS, "auth_problem": bool(last and last["kind"] == "auth"),
@@ -293,6 +326,8 @@ class Reconnect(BaseModel):
 @app.post("/api/reconnect")
 def reconnect(body: Reconnect, request: Request, background: BackgroundTasks):
     """Reconnexion à Pronote depuis une capture du QR code + son PIN. Rien n'est conservé hors credentials.json."""
+    if (request.state.user or {}).get("role") == "admin":
+        raise HTTPException(403, "Compte administrateur : pas de connexion Pronote.")
     if os.environ.get("ALLOW_RECONNECT", "1") != "1":
         raise HTTPException(403, "Reconnexion désactivée dans cet environnement (ALLOW_RECONNECT=0).")
     try:
@@ -313,7 +348,9 @@ def reconnect(body: Reconnect, request: Request, background: BackgroundTasks):
 
 
 @app.post("/sync")
-def sync_now(background: BackgroundTasks):
+def sync_now(request: Request, background: BackgroundTasks):
+    if (request.state.user or {}).get("role") == "admin":  # pas de Pronote pour ce compte
+        return RedirectResponse("/", status_code=303)
     background.add_task(sync.run_sync)
     return RedirectResponse("/", status_code=303)
 

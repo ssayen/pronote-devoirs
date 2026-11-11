@@ -115,7 +115,7 @@ with TestClient(app) as a, TestClient(app) as b:
         assert 'data-readonly="1"' in page and 'data-role="parent"' in page
         for method, url, kw in [("post", "/api/cards", {"json": {"subject": "x", "description": "y", "due_date": "2030-01-01"}}),
                                 ("put", "/api/settings", {"json": {"theme": "dark"}}), ("post", "/sync", {}), ("post", "/api/reconnect", {"json": {}}),
-                                ("post", "/api/parent-invite", {}), ("post", "/move/old", {})]:
+                                ("post", "/api/parent-invite", {}), ("post", "/move/old", {}), ("post", "/api/packs/2/open", {})]:
             assert getattr(p, method)(url, **kw).status_code == 403, url
         assert b.get("/api/settings").json()["theme"] == "dark" and len(b.get("/api/homework").json()) == 1
         assert reg(p, "papa", role="parent", link=code, image=B64P, pin="1234").status_code == 403, "code à usage unique"
@@ -130,6 +130,26 @@ with TestClient(app) as a, TestClient(app) as b:
     with TestClient(app) as c:
         codes = [c.post("/api/login", json={"login": "alice", "password": "faux"}).status_code for _ in range(10)]
         assert codes[-1] == 429, codes
+# ---- compte administrateur : comme un élève, sans QR code, avec données de démo et outil de points ----
+from app import admin as adm, accounts as acc
+aid = adm.create_admin("Testeur", "motdepasse1")
+try: adm.create_admin("testeur", "motdepasse1"); raise SystemExit("doublon accepté")
+except ValueError: pass
+assert aid not in acc.user_ids() and aid in acc.user_ids(("student", "admin")), "l'admin n'est jamais synchronisé"
+import app.webauth as _w; _w._FAILS.clear()   # le test de limitation plus haut a bloqué cette adresse
+with TestClient(app) as t:
+    assert t.post("/api/login", json={"login": "testeur", "password": "motdepasse1"}).status_code == 200
+    g = t.get("/api/game").json(); assert g["missions"] and g["history"], "données de démo + missions dès la première visite"
+    assert t.get("/api/results").json()["periods"] and 'data-role="admin"' in t.get("/", headers=H).text
+    r = t.post("/api/admin/points", json={"points": 25}); assert r.status_code == 200 and r.json()["points"] == g["points"] + 25
+    g2 = t.get("/api/game").json(); assert g2["level"] > g["level"] and g2["packs"] >= 2
+    assert t.post("/api/packs/%d/open" % g2["packs_list"][0]["level"]).status_code == 200
+    assert t.post("/api/admin/points", json={"points": 0}).status_code == 422
+    assert t.post("/api/reconnect", json={"image": "x", "pin": "1234"}).status_code == 403
+    assert t.post("/sync", follow_redirects=False).status_code == 303
+    with db.as_user(aid), db.conn() as c: assert c.execute("SELECT COUNT(*) FROM sync_log").fetchone()[0] == 0
+    code = t.post("/api/parent-invite").json()["code"]; assert len(code) == 9, "l'admin peut tester la liaison parent"
+assert b.post("/api/admin/points", json={"points": 5}).status_code == 403, "réservé à l'admin"
 # passage d'un jeton parent à un jeton élève : un client élève n'a pas set_child
 class StudentClient:
     logged_in = True

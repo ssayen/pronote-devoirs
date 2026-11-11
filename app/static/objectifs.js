@@ -1,0 +1,161 @@
+// Onglet « Objectifs » : niveau, missions, paquets, historique des points. Pastille de niveau + barre sur l'avatar.
+// Utilise les fonctions globales de la page (el, $, toast, JSON_HDR), READONLY (compte parent) et la constante GAME.
+(() => {
+  const root = $("#goals");
+  const nf = new Intl.NumberFormat("fr-FR", { maximumFractionDigits: 1 });
+  const pts = n => `${n} pt${n > 1 ? "s" : ""}`;
+  const day = iso => new Date(iso + "T12:00:00").toLocaleDateString("fr-FR", { day: "numeric", month: "long" });
+  const daysLeft = iso => Math.ceil((new Date(iso + "T23:59:59") - new Date()) / 86400000);
+  const label = m => m.label;
+  let data = GAME;
+
+  // ---- pastille de niveau et barre sur l'avatar ----
+  const wrap = $(".avwrap");
+  const badge = el("span", "lvl"), bar = el("span", "xp"), fill = el("i");
+  bar.append(fill); wrap.append(badge, bar);
+  function paintAvatar(g) {
+    badge.textContent = g.level; fill.style.width = g.pct + "%";
+    const t = `Niveau ${g.level} · ${g.into} / ${g.per_level} points` + (g.packs ? ` · ${g.packs} paquet${g.packs > 1 ? "s" : ""} à ouvrir` : "");
+    wrap.title = t; badge.classList.toggle("gift", g.packs > 0);
+    bar.setAttribute("role", "progressbar"); bar.setAttribute("aria-label", t);
+    bar.setAttribute("aria-valuemin", 0); bar.setAttribute("aria-valuemax", g.per_level); bar.setAttribute("aria-valuenow", g.into);
+  }
+  paintAvatar(GAME);
+
+  const meter = (pct, cls = "") => { const m = el("div", "meter " + cls), i = el("i"); i.style.width = Math.max(0, Math.min(100, pct)) + "%"; m.append(i); return m; };
+
+  function levelCard(g) {
+    const c = el("section", "g-level");
+    const big = el("div", "g-big"); big.append(el("small", null, "Niveau"), el("b", null, String(g.level)));
+    const side = el("div", "g-side");
+    side.append(el("div", "g-line", `${g.into} / ${g.per_level} points`), meter(g.pct),
+                el("div", "g-sub", `Encore ${pts(g.to_next)} avant le niveau ${g.level + 1} · ${pts(g.points)} au total`));
+    c.append(big, side);
+    return c;
+  }
+
+  function packs(g) {
+    const open = g.packs_list.filter(p => !p.opened_at);
+    const sec = el("section", "g-sec");
+    sec.append(el("h2", null, "Paquets"));
+    if (!open.length) { sec.append(el("p", "g-empty", "Aucun paquet à ouvrir. Un nouveau paquet arrive à chaque niveau gagné.")); return sec; }
+    for (const p of open) {
+      const row = el("div", "g-pack");
+      row.append(el("span", "g-gift", "🎁"), el("span", "g-txt", `Paquet du niveau ${p.level}`));
+      if (READONLY) row.append(el("span", "g-sub", "à ouvrir par l'élève"));
+      else {
+        const b = el("button", "btn primary", "Ouvrir"); b.type = "button";
+        b.onclick = () => openPack(p.level, b);
+        row.append(b);
+      }
+      sec.append(row);
+    }
+    return sec;
+  }
+
+  async function openPack(level, btn) {
+    btn.disabled = true;
+    try {
+      const r = await fetch(`/api/packs/${level}/open`, { method: "POST" });
+      if (!r.ok) throw new Error(r.status);
+      const j = await r.json();
+      reveal(j.reward);
+      await refresh();
+    } catch (e) { btn.disabled = false; toast("Impossible d'ouvrir le paquet, réessayer"); }
+  }
+
+  function reveal(reward) {   // fenêtre de découverte de la récompense
+    const d = el("dialog", "g-reveal");
+    const b = el("div", "g-rbody");
+    b.append(el("div", "g-confetti", "🎉"), el("p", "g-sub", "Tu as gagné :"), el("p", "g-reward", reward));
+    const ok = el("button", "btn primary", "Super !"); ok.type = "button";
+    ok.onclick = () => { d.close(); d.remove(); };
+    b.append(ok); d.append(b); document.body.append(d);
+    d.addEventListener("close", () => d.remove());
+    d.showModal();
+  }
+
+  function missionCard(m) {
+    const c = el("article", "g-mission");
+    const top = el("div", "g-mtop");
+    top.append(el("span", "g-mlabel", label(m)), el("span", "g-pts", "+" + pts(m.points)));
+    c.append(top);
+    if (m.status === "active") {
+      const p = m.progress, left = daysLeft(m.expires_at);
+      const pct = m.kind === "beat_class" ? (p.current >= p.target ? 100 : Math.max(0, 100 * p.current / p.target))
+                                          : 100 * p.current / Math.max(p.target, 1e-9);
+      c.append(meter(pct), el("div", "g-sub", `${p.text} · ${left > 1 ? `encore ${left} jours` : left === 1 ? "dernier jour" : "se termine aujourd'hui"}`));
+    } else {
+      c.classList.add(m.status);
+      c.append(el("div", "g-sub", m.status === "done" ? `✅ Réussie le ${day(m.done_at)}` : `⌛ Expirée le ${day(m.expires_at)}`));
+    }
+    return c;
+  }
+
+  function missions(g) {
+    const sec = el("section", "g-sec");
+    sec.append(el("h2", null, "Missions en cours"));
+    const act = g.missions.filter(m => m.status === "active");
+    if (!act.length) sec.append(el("p", "g-empty", "Pas de mission pour l'instant : de nouvelles apparaîtront après la prochaine synchronisation."));
+    const grid = el("div", "g-grid"); for (const m of act) grid.append(missionCard(m)); sec.append(grid);
+    const past = g.missions.filter(m => m.status !== "active");
+    if (past.length) {
+      const det = el("details", "g-past"); det.append(el("summary", null, `Missions terminées (${past.length})`));
+      const gr = el("div", "g-grid"); for (const m of past) gr.append(missionCard(m)); det.append(gr); sec.append(det);
+    }
+    return sec;
+  }
+
+  function rewards(g) {
+    const got = g.packs_list.filter(p => p.opened_at);
+    if (!got.length) return null;
+    const sec = el("section", "g-sec"); sec.append(el("h2", null, "Récompenses obtenues"));
+    const ul = el("ul", "g-list");
+    for (const p of got) ul.append(el("li", null, `Niveau ${p.level} : ${p.reward}`));
+    sec.append(ul); return sec;
+  }
+
+  function history(g) {
+    const sec = el("section", "g-sec"); sec.append(el("h2", null, "Derniers points"));
+    if (!g.history.length) { sec.append(el("p", "g-empty", "Les notes de 16 ou plus et les missions réussies rapportent des points : 16-17 = 1 pt, 18-19 = 2 pts, 20 = 3 pts.")); return sec; }
+    const ul = el("ul", "g-list");
+    for (const h of g.history) { const li = el("li"); li.append(el("b", null, "+" + h.points), " " + h.label.replace(/&amp;/g, "&")); ul.append(li); }
+    sec.append(ul); return sec;
+  }
+
+  function admin() {   // outils de test : compte administrateur seulement
+    const sec = el("section", "g-sec g-admin");
+    sec.append(el("h2", null, "Outils de test (administrateur)"));
+    const row = el("div", "g-adm");
+    row.append(el("span", "g-sub", "M'octroyer des points :"));
+    for (const n of [1, 3, 10, 25]) {
+      const b = el("button", "btn", "+" + n); b.type = "button";
+      b.onclick = async () => {
+        try {
+          const r = await fetch("/api/admin/points", { method: "POST", headers: JSON_HDR, body: JSON.stringify({ points: n }) });
+          if (!r.ok) throw new Error(r.status);
+          await refresh(); toast(`+${pts(n)} ajouté${n > 1 ? "s" : ""}`);
+        } catch (e) { toast("Impossible d'ajouter les points"); }
+      };
+      row.append(b);
+    }
+    sec.append(row); return sec;
+  }
+
+  function draw() {
+    if (!data.packs_list) { root.replaceChildren(el("p", "g-empty", "Chargement…")); return; }   // la page ne contient que le résumé ; le détail arrive par /api/game
+    root.replaceChildren(levelCard(data), packs(data), missions(data));
+    const r = rewards(data); if (r) root.append(r);
+    root.append(history(data));
+    if (document.documentElement.dataset.role === "admin") root.append(admin());
+  }
+
+  async function refresh() {
+    try {
+      const r = await fetch("/api/game"); if (!r.ok) throw new Error(r.status);
+      data = await r.json(); paintAvatar(data); draw();
+    } catch (e) { /* on garde ce qui est affiché */ }
+  }
+
+  VIEWS.objectifs = { el: root, draw, show: refresh };
+})();
