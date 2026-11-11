@@ -38,6 +38,32 @@
   .col { --c:var(--todo); background: var(--col); border:1px solid var(--line); border-top:4px solid var(--c); border-radius:12px; padding:.6rem; min-height:12rem; }
   .col[data-status="doing"] { --c:var(--doing); } .col[data-status="done"] { --c:var(--done); }
   .col.over { outline:2px dashed #2f6fed; background:#2f6fed18; }
+  .col .chev { display:none; }
+  @keyframes bump { 40% { transform:scale(1.6); } }
+  .col h2 .n.bump { animation:bump .5s ease-out; }
+  /* téléphone en portrait, vue très étroite : une seule colonne déployée (accordéon). Les autres restent visibles en barre
+     compacte (titre + nombre de cartes) : on peut y déposer une carte, et un appui sur l'en-tête les déploie à la place de la précédente.
+     Seuil identique au seuil JS NARROW. Les autres modes (bureau, paysage, tablette) ne sont pas touchés. */
+  @media (max-width: 560px) {
+    .board { gap:.5rem; }
+    .col h2 { cursor:pointer; -webkit-tap-highlight-color:transparent; }
+    .col h2:focus-visible { outline:2px solid var(--todo); outline-offset:-2px; }
+    .col .chev { display:inline-block; font-size:1.4rem; line-height:1; opacity:.55; transition:transform .15s; }
+    .col.active .chev { transform:rotate(90deg); }
+    .board { --step:4rem; --above:0; }
+    .col:not(.active) { min-height:0; padding-bottom:0; height:3.5rem; overflow:hidden; position:sticky; z-index:20; box-shadow:0 2px 8px var(--shadow); }
+    .col:not(.active) .cards { display:none; }
+    .col:not(.active) h2 { position:static; margin-bottom:0; border-bottom:none; border-radius:10px; padding:.6rem .8rem; }
+    /* barres « collantes » : celles qui précèdent la colonne ouverte restent en haut de l'écran, celles qui la suivent restent en bas.
+       Elles sont donc toujours à portée pour y déposer une carte, même avec une longue liste. */
+    .col.dock-top { top:calc(var(--k) * var(--step)); }
+    .col.dock-bottom { bottom:calc(var(--k) * var(--step)); box-shadow:0 -3px 10px var(--shadow); }
+    .col.active h2 { top:calc(var(--above) * var(--step)); }
+    .col:not(.active) h2 .add { display:none; }
+    .col.active .cards { animation:open .18s ease-out; }
+    @keyframes open { from { opacity:0; transform:translateY(-6px); } }
+  }
+  @media (prefers-reduced-motion: reduce) { .col .chev, .col.active .cards, .col h2 .n.bump { animation:none; transition:none; } }
   /* en-tête collé en haut de l'écran pendant le défilement ; fond opaque pour masquer les cartes qui passent dessous */
   .col h2 { position:sticky; top:0; z-index:10; font-size:1.05rem; margin:-.6rem -.6rem .6rem; padding:.7rem .8rem .5rem;
             background:var(--col); border-radius:12px 12px 0 0; border-bottom:2px solid color-mix(in srgb, var(--c) 35%, transparent);
@@ -269,6 +295,7 @@
   .th-sub { display:block; font-size:.74rem; font-weight:400; opacity:.7; margin-top:.1rem; }
   @media (prefers-reduced-motion: reduce) { .avatar, .av-face, .th-opt { transition:none !important; } .menu { animation:none; } }
   .toast { position:fixed; bottom:1rem; left:50%; transform:translateX(-50%); background:#333; color:#fff; padding:.5rem 1rem; border-radius:6px; display:none; }
+  @media (max-width: 560px) { .toast { z-index:200; bottom:9.5rem; } }   /* au-dessus des barres de colonnes collées en bas */
 </style>
 </head>
 <body>
@@ -292,9 +319,9 @@
 {% endif %}
 <div id="v-devoirs" role="tabpanel" aria-labelledby="tab-devoirs">
 <div class="board" id="board">
-  <section class="col" data-status="todo"><h2><span class="ico">📝</span>À faire <span class="n"></span><button class="add" data-add="todo" title="Ajouter une carte ici">+</button></h2><div class="cards"></div></section>
-  <section class="col" data-status="doing"><h2><span class="ico">🚀</span>En cours <span class="n"></span><button class="add" data-add="doing" title="Ajouter une carte ici">+</button></h2><div class="cards"></div></section>
-  <section class="col" data-status="done"><h2><span class="ico">✅</span>Terminé <span class="n"></span><button class="add" data-add="done" title="Ajouter une carte ici">+</button></h2><div class="cards"></div></section>
+  <section class="col" data-status="todo"><h2><span class="ico">📝</span>À faire <span class="n"></span><span class="chev" aria-hidden="true">›</span><button class="add" data-add="todo" title="Ajouter une carte ici">+</button></h2><div class="cards"></div></section>
+  <section class="col" data-status="doing"><h2><span class="ico">🚀</span>En cours <span class="n"></span><span class="chev" aria-hidden="true">›</span><button class="add" data-add="doing" title="Ajouter une carte ici">+</button></h2><div class="cards"></div></section>
+  <section class="col" data-status="done"><h2><span class="ico">✅</span>Terminé <span class="n"></span><span class="chev" aria-hidden="true">›</span><button class="add" data-add="done" title="Ajouter une carte ici">+</button></h2><div class="cards"></div></section>
 </div>
 
 </div>
@@ -451,9 +478,43 @@ function card(c) {
   return e;
 }
 
+// vue très étroite (téléphone en portrait) : une seule colonne déployée ; même seuil que le CSS ci-dessus
+const NARROW = matchMedia("(max-width: 560px)");
+const LABELS = { todo: "À faire", doing: "En cours", done: "Terminé" };
+let activeStatus = "todo";
+function applyNarrow() {
+  const a = ORDER.indexOf(activeStatus);
+  $("#board").style.setProperty("--above", a);
+  for (const col of document.querySelectorAll(".col")) {
+    const on = col.dataset.status === activeStatus, h = $("h2", col), i = ORDER.indexOf(col.dataset.status);
+    col.classList.toggle("active", on);
+    col.classList.toggle("dock-top", i < a); col.classList.toggle("dock-bottom", i > a);
+    col.style.setProperty("--k", i < a ? i : ORDER.length - 1 - i);     // rang parmi les barres du même côté (0 = au bord de l'écran)
+    if (NARROW.matches) { h.setAttribute("role", "button"); h.tabIndex = 0; h.setAttribute("aria-expanded", on); }
+    else { h.removeAttribute("role"); h.removeAttribute("tabindex"); h.removeAttribute("aria-expanded"); }
+  }
+}
+function activate(status) {
+  if (!NARROW.matches || status === activeStatus) return;
+  activeStatus = status; applyNarrow();
+  requestAnimationFrame(() => $(`.col[data-status="${status}"]`).scrollIntoView({ block: "nearest", behavior: "smooth" }));
+}
+for (const col of document.querySelectorAll(".col")) {
+  const h = $("h2", col);
+  h.addEventListener("click", ev => { if (!ev.target.closest(".add")) activate(col.dataset.status); });
+  h.addEventListener("keydown", ev => {
+    if (ev.target === h && (ev.key === "Enter" || ev.key === " ")) { ev.preventDefault(); activate(col.dataset.status); }
+  });
+}
+NARROW.addEventListener("change", applyNarrow);
+
 async function move(id, status) {
   const c = byId[id]; if (!c || c.status === status) return;
   const prev = c.status; c.status = status; render();       // affichage immédiat
+  if (NARROW.matches && status !== activeStatus) {          // la carte quitte la colonne affichée : on confirme où elle est allée
+    const n = $(`.col[data-status="${status}"] .n`); n.classList.remove("bump"); void n.offsetWidth; n.classList.add("bump");
+    toast(`Carte déplacée vers « ${LABELS[status]} »`);
+  }
   try {
     const r = await fetch(`/move/${encodeURIComponent(id)}`, {
       method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ status }) });
@@ -584,6 +645,7 @@ function applyTheme(t) {
   const root = document.documentElement;
   if (t === "light" || t === "dark") root.setAttribute("data-theme", t); else root.removeAttribute("data-theme");
 }
+applyNarrow();
 render();
 </script>
 <script src="/static/views.js"></script>
