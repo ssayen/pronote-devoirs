@@ -16,7 +16,7 @@ from pydantic import BaseModel, Field
 from . import accounts, db, qr as qrlogin, sync
 
 COOKIE = "session"
-PUBLIC = ("/login", "/register", "/logout", "/api/login", "/api/register", "/manifest.webmanifest", "/sw.js")
+PUBLIC = ("/login", "/register", "/logout", "/api/login", "/api/register", "/manifest.webmanifest", "/sw.js", "/favicon.ico")
 templates = Jinja2Templates(directory=str(Path(__file__).parent / "templates"))
 router = APIRouter()
 

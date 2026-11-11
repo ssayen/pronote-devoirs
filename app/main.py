@@ -150,17 +150,23 @@ def api_results():
 @app.get("/manifest.webmanifest")
 def manifest(request: Request):
     child = sync.child_name() if (db.LOCAL or request.state.user) else ""
-    name = "Devoirs" + (f" — {child}" if child else "")
+    name = "StudyFun" + (f" — {child}" if child else "")
     icons = [
         {"src": "/static/icons/icon-192.png", "sizes": "192x192", "type": "image/png"},
         {"src": "/static/icons/icon-512.png", "sizes": "512x512", "type": "image/png"},
         {"src": "/static/icons/maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable"},
+        {"src": "/static/icons/monochrome-512.png", "sizes": "512x512", "type": "image/png", "purpose": "monochrome"},
     ]
     return JSONResponse(
-        {"name": name, "short_name": "Devoirs", "lang": "fr", "start_url": "/", "scope": "/", "display": "standalone",
+        {"name": name, "short_name": "StudyFun", "lang": "fr", "start_url": "/", "scope": "/", "display": "standalone",
          "background_color": "#f4f6fb", "theme_color": "#3b82f6", "icons": icons},
         media_type="application/manifest+json",
     )
+
+
+@app.get("/favicon.ico", include_in_schema=False)
+def favicon():
+    return FileResponse(Path(__file__).parent / "static" / "icons" / "favicon.ico", media_type="image/x-icon")
 
 
 @app.get("/sw.js")

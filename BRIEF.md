@@ -1,4 +1,4 @@
-# Brief — Webapp « Devoirs Pronote »
+# Brief — Webapp « StudyFun » (ex-« Devoirs Pronote »)
 
 À lire en entier avant de toucher au code. Coller ce fichier (ou `claude` dans le dossier du projet) comme contexte initial.
 

@@ -3,12 +3,14 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Devoirs{{ ' — ' + child if child }}</title>
+<title>StudyFun{{ ' — ' + child if child }}</title>
 <link rel="manifest" href="/manifest.webmanifest" crossorigin="use-credentials">
 <meta name="theme-color" content="#3b82f6">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="mobile-web-app-capable" content="yes">
-<meta name="apple-mobile-web-app-title" content="Devoirs">
+<meta name="apple-mobile-web-app-title" content="StudyFun">
+<link rel="icon" href="/favicon.ico" sizes="48x48">
+<link rel="icon" type="image/png" sizes="32x32" href="/static/icons/favicon-32.png">
 <link rel="apple-touch-icon" href="/static/icons/apple-touch-icon.png">
 <style>
   :root { color-scheme: light; --bg:#f4f6fb; --fg:#1f2430; --panel:#ffffff; --col:#e9edf6; --line:#d5dbe8; --late:#c0392b;
@@ -306,7 +308,7 @@
 </head>
 <body>
 <header>
-  <h1>Devoirs{% if child %} <small>— {{ child }}</small>{% endif %}</h1>
+  <h1>StudyFun{% if child %} <small>— {{ child }}</small>{% endif %}</h1>
   <div class="views" role="tablist" aria-label="Section">
     <button role="tab" id="tab-devoirs" aria-selected="true" aria-controls="v-devoirs" data-view="devoirs">Devoirs</button>
     <button role="tab" id="tab-resultats" aria-selected="false" aria-controls="results" data-view="resultats">Résultats</button>

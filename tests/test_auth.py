@@ -58,7 +58,7 @@ with TestClient(app) as c:
     os.environ["NOTIFY_URL"] = URL; os.environ["NOTIFY_TOKEN"] = "tk_secret"
     state["mode"] = "ok"; sync.run_sync(); assert "refusé la connexion" not in c.get("/").text   # reconnecté
     n = len(received)                                      # (la reconnexion ci-dessus notifie « reconnecté »)
-    assert received[-1]["title"] == "Devoirs Pronote : reconnecte", received[-1]
+    assert received[-1]["title"] == "StudyFun : Pronote reconnecte", received[-1]
     state["mode"] = "auth"; sync.run_sync()
     assert len(received) == n + 1 and "expire" in received[-1]["title"]
     assert received[-1]["path"] == "/mon-topic" and received[-1]["auth"] == "Bearer tk_secret"

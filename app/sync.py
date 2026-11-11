@@ -294,11 +294,11 @@ def run_sync() -> None:
         # une seule notification par changement d'état (pas une toutes les 30 min)
         failure = None
         if kind == "auth" and prev_kind != "auth":
-            failure = notify("Devoirs Pronote : jeton expire",
+            failure = notify("StudyFun : jeton Pronote expire",
                              "Pronote a refuse le jeton : les devoirs ne sont plus synchronises. "
                              "Regenerer un QR code et relancer la connexion (voir le bandeau rouge de l'application).")
         elif kind == "ok" and prev_kind == "auth":
-            failure = notify("Devoirs Pronote : reconnecte", "La synchronisation avec Pronote fonctionne de nouveau.")
+            failure = notify("StudyFun : Pronote reconnecte", "La synchronisation avec Pronote fonctionne de nouveau.")
         if failure:
             msg += f" (notification non envoyée : {failure})"
         with db.conn() as c:

@@ -1,4 +1,4 @@
-# Devoirs Pronote
+# StudyFun (devoirs, résultats et emploi du temps Pronote)
 
 Webapp (FastAPI + SQLite) qui synchronise les devoirs depuis Pronote (via pronotepy, API non officielle),
 les garde en local et renvoie le statut « terminé » vers Pronote.

@@ -14,6 +14,7 @@ with TestClient(app) as c:
     assert j["display"] == "standalone" and j["start_url"] == "/" and "Lucie" in j["name"]
     for i in j["icons"]:
         assert c.get(i["src"]).status_code == 200, i
+    assert c.get("/favicon.ico").status_code == 200 and any(i.get("purpose") == "monochrome" for i in j["icons"])
     sw = c.get("/sw.js")
     assert sw.status_code == 200 and "javascript" in sw.headers["content-type"] and "fetch" in sw.text
     h = c.get("/").text
