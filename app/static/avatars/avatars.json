@@ -1,0 +1,82 @@
+[
+ {
+  "id": "renard",
+  "name": "Renard"
+ },
+ {
+  "id": "hibou",
+  "name": "Hibou"
+ },
+ {
+  "id": "chat",
+  "name": "Chat"
+ },
+ {
+  "id": "loup",
+  "name": "Loup"
+ },
+ {
+  "id": "lapin",
+  "name": "Lapin"
+ },
+ {
+  "id": "panda",
+  "name": "Panda"
+ },
+ {
+  "id": "raton-laveur",
+  "name": "Raton laveur"
+ },
+ {
+  "id": "cerf",
+  "name": "Cerf"
+ },
+ {
+  "id": "crocodile",
+  "name": "Crocodile"
+ },
+ {
+  "id": "perroquet",
+  "name": "Perroquet"
+ },
+ {
+  "id": "chien",
+  "name": "Chien"
+ },
+ {
+  "id": "tigre",
+  "name": "Tigre"
+ },
+ {
+  "id": "koala",
+  "name": "Koala"
+ },
+ {
+  "id": "pieuvre",
+  "name": "Pieuvre"
+ },
+ {
+  "id": "herisson",
+  "name": "Hérisson"
+ },
+ {
+  "id": "ours-polaire",
+  "name": "Ours polaire"
+ },
+ {
+  "id": "cameleon",
+  "name": "Caméléon"
+ },
+ {
+  "id": "paon",
+  "name": "Paon"
+ },
+ {
+  "id": "grenouille",
+  "name": "Grenouille"
+ },
+ {
+  "id": "chauve-souris",
+  "name": "Chauve-souris"
+ }
+]

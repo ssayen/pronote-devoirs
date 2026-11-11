@@ -8,6 +8,7 @@ import secrets
 from contextlib import asynccontextmanager
 from datetime import date
 from pathlib import Path
+from typing import Literal
 
 from fastapi import BackgroundTasks, Depends, FastAPI, HTTPException, Request
 from fastapi.responses import FileResponse, RedirectResponse
@@ -86,6 +87,56 @@ def results_data() -> dict:
     return {"periods": out}
 
 
+def avatar_list() -> list[dict]:
+    """Avatars disponibles : app/static/avatars/avatars.json (écrit par scripts/build_avatars.py), image présente."""
+    folder = Path(__file__).parent / "static" / "avatars"
+    try:
+        items = json.loads((folder / "avatars.json").read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return []
+    return [a for a in items if isinstance(a, dict) and isinstance(a.get("id"), str) and (folder / f"{a['id']}.jpg").is_file()]
+
+
+def settings_data() -> dict:
+    with db.conn() as c:
+        rows = {r["key"]: r["value"] for r in c.execute("SELECT key, value FROM settings")}
+    ids = {a["id"] for a in avatar_list()}
+    return {"avatar": rows.get("avatar") if rows.get("avatar") in ids else None,
+            "theme": rows.get("theme") if rows.get("theme") in ("light", "dark") else "auto"}
+
+
+class SettingsIn(BaseModel):
+    """Seuls les champs présents sont modifiés ; null (avatar) ou « auto » (thème) = valeur par défaut."""
+    avatar: str | None = Field(default=None, max_length=60)
+    theme: Literal["auto", "light", "dark"] | None = None
+
+
+@app.get("/api/settings")
+def get_settings():
+    return settings_data()
+
+
+@app.put("/api/settings")
+def put_settings(body: SettingsIn):
+    """Enregistre la personnalisation : avatar et thème (clair / sombre / auto)."""
+    given = body.model_fields_set
+    if "avatar" in given and body.avatar is not None and body.avatar not in {a["id"] for a in avatar_list()}:
+        raise HTTPException(422, "Avatar inconnu")
+    changes = {}
+    if "avatar" in given:
+        changes["avatar"] = body.avatar
+    if "theme" in given:
+        changes["theme"] = None if body.theme in (None, "auto") else body.theme
+    with db.conn() as c:
+        for key, value in changes.items():
+            if value is None:
+                c.execute("DELETE FROM settings WHERE key = ?", (key,))
+            else:
+                c.execute("INSERT INTO settings (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value",
+                          (key, value))
+    return settings_data()
+
+
 def lessons_data() -> list[dict]:
     with db.conn() as c:
         return [dict(r) for r in c.execute("SELECT * FROM lessons ORDER BY start, end, subject")]
@@ -110,7 +161,7 @@ def index(request: Request):
     return templates.TemplateResponse(
         request,
         "index.html",
-        {"cards": cards, "results": results_data(), "lessons": lessons_data(), "last": last, "today": date.today().isoformat(),
+        {"cards": cards, "results": results_data(), "lessons": lessons_data(), "settings": settings_data(), "avatars": avatar_list(), "last": last, "today": date.today().isoformat(),
          "child": os.environ.get("CHILD_NAME", ""), "push": sync.push_enabled(),
          "keep_days": DONE_KEEP_DAYS, "auth_problem": bool(last and last["kind"] == "auth"),
          "fonds": sorted(p.stem for p in (Path(__file__).parent / "static" / "fonds").glob("*.jpg"))},

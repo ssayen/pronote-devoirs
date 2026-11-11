@@ -53,6 +53,10 @@ CREATE TABLE IF NOT EXISTS lessons (      -- emploi du temps ; dates locales « 
     outing    INTEGER NOT NULL DEFAULT 0,
     memo      TEXT
 );
+CREATE TABLE IF NOT EXISTS settings (     -- personnalisation de l'interface (clé / valeur), conservée dans le volume de données
+    key   TEXT PRIMARY KEY,
+    value TEXT NOT NULL
+);
 CREATE TABLE IF NOT EXISTS sync_log (
     id      INTEGER PRIMARY KEY AUTOINCREMENT,
     at      TEXT NOT NULL DEFAULT (datetime('now')),
