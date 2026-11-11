@@ -175,17 +175,5 @@
     return card;
   }
 
-  // bascule Devoirs / Résultats (mémorisée dans l'adresse : #resultats)
-  let drawn = false;
-  function view(v) {
-    const res = v === "resultats";
-    $("#v-devoirs").hidden = res; root.hidden = !res;
-    for (const id of ["add", "late"]) $("#" + id).hidden = res;
-    for (const b of document.querySelectorAll(".views button")) b.setAttribute("aria-selected", b.dataset.view === v);
-    if (res && !drawn) { draw(); drawn = true; }
-  }
-  for (const b of document.querySelectorAll(".views button")) {
-    b.onclick = () => { history.replaceState(null, "", b.dataset.view === "resultats" ? "#resultats" : location.pathname); view(b.dataset.view); };
-  }
-  view(location.hash === "#resultats" ? "resultats" : "devoirs");
+  VIEWS.resultats = { el: root, draw };
 })();

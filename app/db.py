@@ -39,6 +39,20 @@ CREATE TABLE IF NOT EXISTS averages (   -- toutes les valeurs sont ramenées sur
     max       REAL,
     PRIMARY KEY (period, subject)
 );
+CREATE TABLE IF NOT EXISTS lessons (      -- emploi du temps ; dates locales « AAAA-MM-JJTHH:MM »
+    id        TEXT PRIMARY KEY,
+    start     TEXT NOT NULL,
+    end       TEXT NOT NULL,
+    subject   TEXT NOT NULL,
+    teacher   TEXT,
+    room      TEXT,
+    status    TEXT,
+    canceled  INTEGER NOT NULL DEFAULT 0,
+    test      INTEGER NOT NULL DEFAULT 0,
+    detention INTEGER NOT NULL DEFAULT 0,
+    outing    INTEGER NOT NULL DEFAULT 0,
+    memo      TEXT
+);
 CREATE TABLE IF NOT EXISTS sync_log (
     id      INTEGER PRIMARY KEY AUTOINCREMENT,
     at      TEXT NOT NULL DEFAULT (datetime('now')),

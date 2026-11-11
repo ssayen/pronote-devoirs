@@ -86,6 +86,16 @@ def results_data() -> dict:
     return {"periods": out}
 
 
+def lessons_data() -> list[dict]:
+    with db.conn() as c:
+        return [dict(r) for r in c.execute("SELECT * FROM lessons ORDER BY start, end, subject")]
+
+
+@app.get("/api/lessons")
+def api_lessons():
+    return lessons_data()
+
+
 @app.get("/api/results")
 def api_results():
     return results_data()
@@ -100,7 +110,7 @@ def index(request: Request):
     return templates.TemplateResponse(
         request,
         "index.html",
-        {"cards": cards, "results": results_data(), "last": last, "today": date.today().isoformat(),
+        {"cards": cards, "results": results_data(), "lessons": lessons_data(), "last": last, "today": date.today().isoformat(),
          "child": os.environ.get("CHILD_NAME", ""), "push": sync.push_enabled(),
          "keep_days": DONE_KEEP_DAYS, "auth_problem": bool(last and last["kind"] == "auth"),
          "fonds": sorted(p.stem for p in (Path(__file__).parent / "static" / "fonds").glob("*.jpg"))},

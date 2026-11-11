@@ -159,6 +159,50 @@
   .rtable .minmax { opacity:.55; font-size:.78rem; }
   .rnote { font-size:.8rem; opacity:.65; margin:.7rem 0 0; }
   .rempty { text-align:center; padding:3rem 1rem; opacity:.7; }
+  /* emploi du temps */
+  #timetable { max-width:80rem; margin:0 auto; }
+  .tt-bar { display:flex; align-items:center; gap:.6rem; margin-bottom:.8rem; flex-wrap:wrap; }
+  .tt-title { font-size:1.1rem; margin:0 .3rem; font-weight:700; }
+  .tt-bar .chip { padding:.3rem .9rem; } .tt-bar .chip:disabled { opacity:.35; cursor:default; }
+  .tt-info { display:inline-block; font-size:.92rem; font-weight:600; padding:.4rem .9rem; border-radius:999px; margin-bottom:.9rem;
+             background:color-mix(in srgb, var(--todo) 12%, var(--panel)); border:1px solid color-mix(in srgb, var(--todo) 35%, var(--line)); }
+  .tt-info.now { background:color-mix(in srgb, var(--done) 16%, var(--panel)); border-color:color-mix(in srgb, var(--done) 45%, var(--line)); }
+  .tt-grid { display:grid; grid-template-columns:3rem repeat(var(--n), minmax(0,1fr)); background:var(--panel); border:1px solid var(--line); border-radius:14px; overflow:hidden; box-shadow:0 1px 4px var(--shadow); }
+  .tt-dayhead { padding:.55rem .3rem .45rem; text-align:center; text-transform:capitalize; font-size:.85rem; border-bottom:1px solid var(--line); border-left:1px solid var(--line); display:flex; flex-direction:column; align-items:center; line-height:1.15; }
+  .tt-dayhead b { font-size:1.15rem; }
+  .tt-dayhead.today { background:color-mix(in srgb, var(--todo) 14%, var(--panel)); color:var(--todo); }
+  .tt-corner { border-bottom:1px solid var(--line); }
+  .tt-hours { position:relative; }
+  .tt-hours div { position:absolute; right:.4rem; transform:translateY(-.55em); font-size:.72rem; opacity:.55; font-variant-numeric:tabular-nums; }
+  .tt-col { position:relative; border-left:1px solid var(--line);
+            background-image:repeating-linear-gradient(to bottom, var(--line) 0, var(--line) 1px, transparent 1px, transparent var(--ph)); }
+  .tt-col.today { background-color:color-mix(in srgb, var(--todo) 5%, transparent); }
+  .tt-lesson { position:absolute; box-sizing:border-box; overflow:hidden; border-radius:10px; padding:.3rem .45rem .25rem .55rem; color:#23262e; font-size:.78rem; line-height:1.2;
+               background:linear-gradient(135deg, hsl(var(--h) 92% 92%), hsl(var(--h) 80% 84%)); border-left:4px solid hsl(var(--h) 62% 55%);
+               box-shadow:0 1px 3px var(--shadow); transition:transform .12s, box-shadow .12s; cursor:default; }
+  .tt-lesson:hover { transform:translateY(-1px) scale(1.015); box-shadow:0 6px 14px var(--shadow); z-index:4; overflow:visible; }
+  .tt-subj { display:flex; align-items:center; gap:.3rem; font-weight:700; font-size:.82rem; }
+  .tt-subj span:last-child { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .tt-ico { flex:none; }
+  .tt-lesson.tiny { padding-top:.1rem; padding-bottom:.1rem; } .tt-lesson.tiny .tt-subj { font-size:.74rem; }
+  .tt-time { opacity:.7; font-size:.72rem; font-variant-numeric:tabular-nums; }
+  .tt-meta { opacity:.8; font-size:.72rem; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .tt-badges { display:flex; flex-wrap:wrap; gap:.25rem; margin-top:.2rem; }
+  .tt-badge { font-size:.62rem; font-weight:800; letter-spacing:.03em; text-transform:uppercase; padding:.05rem .4rem; border-radius:999px; background:#2229; color:#fff; }
+  .tt-badge.bad { background:#b3261e; } .tt-badge.warn { background:#a15c00; } .tt-badge.test { background:#5b3fd1; }
+  .tt-lesson.canceled { opacity:.6; background:repeating-linear-gradient(135deg, hsl(var(--h) 25% 92%) 0 6px, hsl(var(--h) 25% 87%) 6px 12px); border-left-color:hsl(var(--h) 20% 65%); }
+  .tt-lesson.canceled .tt-subj span:last-child { text-decoration:line-through; }
+  .tt-lesson.live { box-shadow:0 0 0 2px var(--done), 0 4px 12px var(--shadow); animation:live 2.2s ease-in-out infinite; }
+  @keyframes live { 50% { box-shadow:0 0 0 4px color-mix(in srgb, var(--done) 40%, transparent), 0 4px 12px var(--shadow); } }
+  @media (prefers-reduced-motion: reduce) { .tt-lesson.live { animation:none; } .tt-lesson { transition:none; } }
+  .tt-now { position:absolute; left:0; right:0; height:2px; background:#e11d2e; z-index:3; pointer-events:none; }
+  .tt-now::before { content:""; position:absolute; left:-4px; top:-3px; width:8px; height:8px; border-radius:50%; background:#e11d2e; }
+  .tt-day h3 { font-size:.95rem; margin:1.1rem 0 .5rem; }
+  .tt-day.today h3 { color:var(--todo); }
+  .tt-row { display:grid; grid-template-columns:3.2rem 1fr; gap:.6rem; margin-bottom:.45rem; align-items:stretch; }
+  .tt-rt { display:flex; flex-direction:column; font-variant-numeric:tabular-nums; font-size:.85rem; padding-top:.2rem; } .tt-rt span { opacity:.55; font-size:.75rem; }
+  .tt-agenda .tt-lesson { position:relative; padding:.5rem .7rem; font-size:.85rem; }
+  .tt-agenda .tt-lesson:hover { transform:none; }
   .toast { position:fixed; bottom:1rem; left:50%; transform:translateX(-50%); background:#333; color:#fff; padding:.5rem 1rem; border-radius:6px; display:none; }
 </style>
 </head>
@@ -168,6 +212,7 @@
   <div class="views" role="tablist" aria-label="Section">
     <button role="tab" id="tab-devoirs" aria-selected="true" aria-controls="v-devoirs" data-view="devoirs">Devoirs</button>
     <button role="tab" id="tab-resultats" aria-selected="false" aria-controls="results" data-view="resultats">Résultats</button>
+    <button role="tab" id="tab-edt" aria-selected="false" aria-controls="timetable" data-view="edt">Emploi du temps</button>
   </div>
   <div class="tools"><span class="alert" id="late"></span><button class="btn primary" id="add">➕ Nouvelle carte</button><button class="theme" id="theme" title="Changer de thème"></button></div>
 </header>
@@ -189,6 +234,7 @@
 </div>
 
 <main id="results" role="tabpanel" aria-labelledby="tab-resultats" hidden></main>
+<main id="timetable" role="tabpanel" aria-labelledby="tab-edt" hidden></main>
 
 <dialog id="detail">
   <div class="dhead" id="d-head">
@@ -257,6 +303,7 @@
 const CARDS = {{ cards|tojson }};
 const TODAY = {{ today|tojson }};
 const RESULTS = {{ results|tojson }};
+const LESSONS = {{ lessons|tojson }};
 const FONDS = new Set({{ fonds|tojson }});   // illustrations réellement présentes dans app/static/fonds
 // « Terminé » : on masque (sans rien supprimer) les devoirs dont l'échéance a plus de KEEP_DAYS jours
 const KEEP_DAYS = {{ keep_days }};
@@ -479,6 +526,9 @@ $("#theme").onclick = () => {
 applyTheme();
 render();
 </script>
+<script src="/static/views.js"></script>
 <script src="/static/results.js"></script>
+<script src="/static/timetable.js"></script>
+<script>initViews();</script>
 </body>
 </html>

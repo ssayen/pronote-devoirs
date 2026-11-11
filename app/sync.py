@@ -146,6 +146,26 @@ def _sync_results(client) -> int:
     return n
 
 
+def _sync_lessons(client) -> int:
+    """Emploi du temps : de la semaine précédente à 5 semaines devant. Remplace cette fenêtre
+    (un cours annulé ou déplacé doit disparaître / changer), sans toucher à l'historique plus ancien."""
+    mon = date.today() - timedelta(days=date.today().weekday())
+    lo, hi = mon - timedelta(days=7), mon + timedelta(days=35)
+    rows, seen = [], {}
+    for l in client.lessons(lo, hi):
+        subject = (l.subject.name if l.subject else None) or "Cours"
+        start, end = l.start.strftime("%Y-%m-%dT%H:%M"), l.end.strftime("%Y-%m-%dT%H:%M")
+        base = db.content_key(subject, start, end)
+        n = seen.get(base, 0); seen[base] = n + 1
+        rows.append((f"{base}-{n}", start, end, subject, l.teacher_name, l.classroom, l.status,
+                     int(bool(l.canceled)), int(bool(l.test)), int(bool(l.detention)), int(bool(l.outing)), l.memo))
+    with db.conn() as c:
+        c.execute("DELETE FROM lessons WHERE start >= ? AND start < ?", (lo.isoformat(), hi.isoformat()))
+        c.executemany("INSERT OR REPLACE INTO lessons (id, start, end, subject, teacher, room, status, canceled, test, detention, outing, memo) "
+                      "VALUES (?,?,?,?,?,?,?,?,?,?,?,?)", rows)
+    return len(rows)
+
+
 def _sync() -> str:
     client = get_client()
     today = date.today()
@@ -213,6 +233,10 @@ def _sync() -> str:
         msg += f", moyennes de {_sync_results(client)} période(s)"
     except Exception as e:  # noqa: BLE001
         msg += f" (moyennes non lues : {type(e).__name__})"
+    try:
+        msg += f", {_sync_lessons(client)} cours"
+    except Exception as e:  # noqa: BLE001
+        msg += f" (emploi du temps non lu : {type(e).__name__})"
     return msg
 
 
