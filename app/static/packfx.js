@@ -8,6 +8,85 @@ const PackFX = (() => {
     epic:      { label: "Épique",     color: "#b45bff", glow: "#dcaaff", power: 1.15 },
     legendary: { label: "Légendaire", color: "#ffb800", glow: "#ffe08a", power: 1.7 },
   };
+
+  // ---- son : tout est synthétisé (Web Audio), aucun fichier ----
+  const NOTES = { C5: 523.25, E5: 659.25, G5: 783.99, C6: 1046.5, E6: 1318.5, G6: 1568, C7: 2093 };
+  const ARPEGE = { common: ["C5", "E5", "G5"], rare: ["C5", "E5", "G5", "C6"], epic: ["C5", "E5", "G5", "C6", "E6"],
+                   legendary: ["C5", "E5", "G5", "C6", "E6", "G6", "C7"] };
+
+  function makeSound(ctx, out, power = 1, rarity = "common") {
+    const noise = (() => { const b = ctx.createBuffer(1, ctx.sampleRate * 2, ctx.sampleRate), d = b.getChannelData(0); for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1; return b; })();
+    const live = [];                                   // gains de la montée : coupés net si on passe l'animation
+    const env = (g, t, peak, attack, dur) => { g.gain.setValueAtTime(0.0001, t); g.gain.linearRampToValueAtTime(peak, t + attack); g.gain.exponentialRampToValueAtTime(0.0001, t + dur); };
+    function tone(f0, t, dur, { type = "sine", gain = 0.3, f1 = null, attack = 0.005, dest = out, keep = false } = {}) {
+      const o = ctx.createOscillator(), g = ctx.createGain(); o.type = type; o.frequency.setValueAtTime(f0, t);
+      if (f1) o.frequency.exponentialRampToValueAtTime(f1, t + dur);
+      env(g, t, gain, attack, dur); o.connect(g); g.connect(dest); o.start(t); o.stop(t + dur + 0.05); if (keep) live.push(g);
+    }
+    function hiss(t, dur, { type = "lowpass", f0 = 2000, f1 = 200, gain = 0.3, q = 0.7, attack = 0.005, keep = false } = {}) {
+      const src = ctx.createBufferSource(), f = ctx.createBiquadFilter(), g = ctx.createGain(); src.buffer = noise; src.loop = true;
+      f.type = type; f.Q.value = q; f.frequency.setValueAtTime(f0, t); f.frequency.exponentialRampToValueAtTime(f1, t + dur);
+      env(g, t, gain, attack, dur); src.connect(f); f.connect(g); g.connect(out); src.start(t, Math.random()); src.stop(t + dur + 0.05); if (keep) live.push(g);
+    }
+    const bell = (f, t, dur = 0.9, gain = 0.2) => { tone(f, t, dur, { gain, attack: 0.003 }); tone(f * 2.76, t, dur * 0.5, { gain: gain * 0.35, attack: 0.002 }); tone(f * 0.5, t, dur * 0.7, { gain: gain * 0.25, type: "triangle" }); };
+    return {
+      drop(t) {                                      // chute (sifflement) puis choc au contact
+        hiss(t, 0.42, { type: "bandpass", f0: 3000, f1: 350, gain: 0.18, q: 1.2 });
+        tone(150, t + 0.45, 0.3, { f1: 42, gain: 0.85 }); hiss(t + 0.45, 0.08, { type: "highpass", f0: 1800, f1: 3500, gain: 0.25 });
+      },
+      charge(t, dur = 1.5) {                         // montée de tension : la hauteur et le grondement grimpent, battements de plus en plus rapides
+        const lp = ctx.createBiquadFilter(); lp.type = "lowpass"; lp.frequency.setValueAtTime(300, t); lp.frequency.exponentialRampToValueAtTime(5500, t + dur);
+        lp.connect(out);
+        for (const [type, a, b, g] of [["sawtooth", 70, 760, 0.16], ["square", 140, 1500, 0.05]]) {
+          const o = ctx.createOscillator(), gn = ctx.createGain(); o.type = type; o.frequency.setValueAtTime(a, t); o.frequency.exponentialRampToValueAtTime(b, t + dur);
+          gn.gain.setValueAtTime(0.0001, t); gn.gain.linearRampToValueAtTime(g, t + dur); o.connect(gn); gn.connect(lp); o.start(t); o.stop(t + dur + 0.1); live.push(gn);
+        }
+        hiss(t, dur, { type: "lowpass", f0: 200, f1: 1400, gain: 0.3, attack: dur * 0.9, keep: true });
+        const n = 18;
+        for (let i = 0; i < n; i++) tone(380 + 1300 * (i / n), t + dur * (1 - Math.pow(1 - i / n, 1.8)), 0.06, { type: "triangle", gain: 0.12 + 0.12 * i / n });
+      },
+      stopCharge() { const t = ctx.currentTime; for (const g of live) { try { g.gain.cancelScheduledValues(t); g.gain.setTargetAtTime(0.0001, t, 0.02); } catch (e) {} } live.length = 0; },
+      burst(t) {                                     // explosion : grosse basse, souffle, claquement
+        const k = Math.min(power, 1.4);
+        tone(95, t, 0.9 + 0.5 * k, { f1: 26, gain: 0.7 * k });
+        hiss(t, 1.0, { type: "lowpass", f0: 9000, f1: 150, gain: 0.5 * k });
+        hiss(t, 0.14, { type: "highpass", f0: 3000, f1: 6000, gain: 0.4 });
+        tone(1300, t, 0.5, { type: "sawtooth", f1: 60, gain: 0.22 });
+        if (rarity === "legendary") { tone(70, t + 0.16, 1.6, { f1: 24, gain: 0.5 }); hiss(t + 0.16, 0.9, { type: "lowpass", f0: 6000, f1: 200, gain: 0.3 }); }
+      },
+      reveal(t) {                                    // arpège brillant ; plus la rareté est haute, plus il est long et riche
+        const seq = ARPEGE[rarity] || ARPEGE.common, step = rarity === "legendary" ? 0.075 : 0.095;
+        seq.forEach((n, i) => bell(NOTES[n], t + i * step, 0.9 + i * 0.05, 0.18));
+        const end = t + seq.length * step;
+        if (rarity === "epic" || rarity === "legendary") {   // accord tenu
+          const lp = ctx.createBiquadFilter(); lp.type = "lowpass"; lp.frequency.value = 1500; lp.connect(out);
+          const g = ctx.createGain(); g.gain.setValueAtTime(0.0001, end); g.gain.linearRampToValueAtTime(rarity === "legendary" ? 0.22 : 0.14, end + 0.25); g.gain.exponentialRampToValueAtTime(0.0001, end + 2); g.connect(lp);
+          for (const f of [261.6, 329.6, 392, 523.3, rarity === "legendary" ? 784 : 659.3]) for (const d of [-4, 4]) { const o = ctx.createOscillator(); o.type = "sawtooth"; o.frequency.value = f; o.detune.value = d; o.connect(g); o.start(end); o.stop(end + 2.1); }
+        }
+        if (rarity === "legendary") {                        // gong et pluie de paillettes
+          tone(220, end, 2.2, { gain: 0.25 }); tone(220 * 2.4, end, 1.6, { gain: 0.1 }); tone(220 * 3.76, end, 1.1, { gain: 0.06 });
+          for (let i = 0; i < 12; i++) bell(2000 + Math.random() * 2600, end + 0.1 + i * 0.1 + Math.random() * 0.05, 0.5, 0.05);
+        } else if (rarity === "epic") for (let i = 0; i < 6; i++) bell(2200 + Math.random() * 1800, end + 0.1 + i * 0.12, 0.45, 0.045);
+      },
+    };
+  }
+  let actx = null, master = null;
+  const soundOn = () => { try { return localStorage.getItem("pfx-sound") !== "0"; } catch (e) { return true; } };
+  function setSound(on) { try { localStorage.setItem("pfx-sound", on ? "1" : "0"); } catch (e) {} if (master) master.gain.value = on ? 0.8 : 0; }
+  function unlock() {   // à appeler dans le geste de l'utilisateur (clic) : les navigateurs mobiles l'exigent pour jouer un son
+    try {
+      if (!actx) {
+        const AC = window.AudioContext || window.webkitAudioContext; if (!AC) return;
+        actx = new AC(); const comp = actx.createDynamicsCompressor(); master = actx.createGain();
+        comp.threshold.value = -20; comp.knee.value = 12; comp.ratio.value = 10; comp.attack.value = 0.003; comp.release.value = 0.2; master.gain.value = soundOn() ? 0.8 : 0;
+        master.connect(comp); comp.connect(actx.destination);
+      }
+      if (actx.state === "suspended") actx.resume();
+    } catch (e) { actx = null; }
+  }
+  const quiet = { drop() {}, charge() {}, stopCharge() {}, burst() {}, reveal() {} };
+  function sounds(power, rarity) { unlock(); return actx ? makeSound(actx, master, power, rarity) : quiet; }
+  const buzz = p => { try { if (soundOn() && navigator.vibrate) navigator.vibrate(p); } catch (e) {} };
   const SVGNS = "http://www.w3.org/2000/svg";
   let uid = 0;
 
@@ -59,12 +138,18 @@ const PackFX = (() => {
           </div>
         </div>
         <div class="pfx-flash"></div>
+        <button type="button" class="pfx-mute"></button>
         <button type="button" class="pfx-skip">Passer</button>
         <button type="button" class="btn primary pfx-done">Super !</button>`;
       root.querySelector(".pfx-name").textContent = reward;
       const packEl = root.querySelector(".pfx-pack"); packEl.append(svg());
       const leak = packEl.querySelector(".pfx-leak");
       const canvas = root.querySelector(".pfx-canvas"), g = canvas.getContext("2d");
+      const snd = sounds(R.power, rarity);
+      const mute = root.querySelector(".pfx-mute");
+      const paintMute = () => { const on = soundOn(); mute.textContent = on ? "🔊" : "🔇"; mute.setAttribute("aria-label", on ? "Couper le son" : "Activer le son"); mute.setAttribute("aria-pressed", String(!on)); };
+      mute.onclick = () => { setSound(!soundOn()); paintMute(); };
+      paintMute();
       const prevFocus = document.activeElement;
       const prevOverflow = document.body.style.overflow;
       document.body.style.overflow = "hidden";
@@ -138,17 +223,19 @@ const PackFX = (() => {
       function go(next) {
         if (phase === next || closed) return;
         phase = next; root.dataset.phase = next;
-        if (next === "charge") root.classList.add("charge");
+        if (next === "charge") { root.classList.add("charge"); snd.charge(actx ? actx.currentTime : 0); buzz([40, 60, 40, 50, 40, 40, 40, 30, 40, 20, 40, 15, 60, 10, 80]); }
         if (next === "burst") {
           packEl.style.transform = ""; shake = 22; tBurst = performance.now();
           root.classList.add("burst"); burst();
+          if (actx) { snd.stopCharge(); snd.burst(actx.currentTime); snd.reveal(actx.currentTime + 0.32); }
+          buzz([220]);
           later(() => go("reveal"), 380);
         }
         if (next === "reveal") { root.classList.add("reveal"); later(() => go("done"), 1100); }
         if (next === "done") { root.classList.add("done"); root.querySelector(".pfx-done").focus(); root.querySelector(".pfx-skip").hidden = true; }
       }
       function close() {
-        if (closed) return; closed = true; cancelAnimationFrame(raf); timers.forEach(clearTimeout);
+        if (closed) return; closed = true; cancelAnimationFrame(raf); timers.forEach(clearTimeout); snd.stopCharge();
         removeEventListener("resize", fit); removeEventListener("keydown", onKey, true);
         root.classList.add("out");
         setTimeout(() => { root.remove(); document.body.style.overflow = prevOverflow; if (prevFocus && prevFocus.focus) prevFocus.focus(); resolve(); }, calm ? 0 : 250);
@@ -163,14 +250,16 @@ const PackFX = (() => {
       root.querySelector(".pfx-done").onclick = close;
 
       if (calm) {   // mouvement réduit : pas de secousse ni de particules, la carte apparaît directement
+        if (actx) snd.reveal(actx.currentTime);
         root.classList.add("calm", "burst", "reveal", "done"); phase = "done"; root.querySelector(".pfx-skip").hidden = true;
         root.querySelector(".pfx-done").focus(); return;
       }
+      if (actx) snd.drop(actx.currentTime);
       t0 = performance.now(); raf = requestAnimationFrame(frame);
       root.querySelector(".pfx-skip").focus();
       later(() => go("charge"), 800);
     });
   }
 
-  return { open, svg, RARITY };
+  return { open, svg, unlock, RARITY, _makeSound: makeSound };
 })();

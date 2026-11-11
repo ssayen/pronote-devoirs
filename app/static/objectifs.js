@@ -64,6 +64,7 @@
   }
 
   async function openPack(level, btn) {
+    PackFX.unlock();       // le son doit être autorisé dans le geste de clic, avant la requête
     btn.disabled = true;
     try {
       const r = await fetch(`/api/packs/${level}/open`, { method: "POST" });

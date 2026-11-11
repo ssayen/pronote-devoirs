@@ -102,6 +102,8 @@
 @keyframes pfxup { from { opacity:0; transform:translateY(14px) scale(.9); } to { opacity:1; transform:none; } }
 .pfx-skip { position:absolute; top:max(1rem, env(safe-area-inset-top)); right:1rem; z-index:8; font:inherit; font-size:.9rem; color:#fff; background:#ffffff1f; border:1px solid #ffffff44; border-radius:999px; padding:.4rem .9rem; cursor:pointer; }
 .pfx-skip:hover { background:#ffffff33; }
+.pfx-mute { position:absolute; top:max(1rem, env(safe-area-inset-top)); left:1rem; z-index:8; font-size:1.05rem; line-height:1; color:#fff; background:#ffffff1f; border:1px solid #ffffff44; border-radius:999px; padding:.4rem .6rem; cursor:pointer; }
+.pfx-mute:hover { background:#ffffff33; }
 .pfx-done { position:absolute; left:50%; bottom:max(2rem, env(safe-area-inset-bottom)); transform:translateX(-50%) translateY(20px); z-index:8; font-size:1.15rem; font-weight:800; padding:.8rem 2.4rem; border-radius:999px; opacity:0; visibility:hidden; transition:opacity .4s, transform .4s; }
 .done .pfx-done { opacity:1; visibility:visible; transform:translateX(-50%); }
 .pfx.calm .pfx-pack, .pfx.calm .pfx-ring, .pfx.calm .pfx-flash, .pfx.calm .pfx-canvas { display:none; }
