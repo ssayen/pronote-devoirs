@@ -401,9 +401,10 @@ const icon = subj => { const k = strip(subj); const m = ICONS.find(([w]) => k.in
 const BGS = [  // mots-clés -> image de fond (app/static/fonds/<nom>.jpg)
   ["scientifique", "enseignement-scientifique"], ["physique", "physique-chimie"], ["chimie", "physique-chimie"],
   ["svt", "svt"], ["vie et de la terre", "svt"], ["vie et terre", "svt"],
-  ["math", "maths"], ["histoire", "histoire-geo"], ["geo", "histoire-geo"], ["anglais", "anglais"], ["italien", "italien"],
+  ["math", "maths"], ["histoire", "histoire-geo"], ["geo", "histoire-geo"], ["anglais", "anglais"], ["italien", "italien"], ["philo", "philo"],
 ];
-const bgOf = subj => { const k = strip(subj); if (/ (sport|ed physique|education physique)/.test(k)) return null; const m = BGS.find(([w, f]) => k.includes(w) && FONDS.has(f)); return m ? m[1] : null; };
+// le sport ne doit jamais prendre l'illustration de physique-chimie (le mot « physique ») : image dédiée, sinon aucune
+const bgOf = subj => { const k = strip(subj); if (/ (sport|ed physique|education physique)/.test(k)) return FONDS.has("sport") ? "sport" : null; const m = BGS.find(([w, f]) => k.includes(w) && FONDS.has(f)); return m ? m[1] : null; };
 
 function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; }
 
