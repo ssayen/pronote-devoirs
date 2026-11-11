@@ -11,10 +11,19 @@ from datetime import date, timedelta
 POINTS_PER_LEVEL = 10
 MISSION_COUNT = 3          # missions actives en même temps
 MISSION_DAYS = 21
-REWARDS = [                # liste provisoire : les vraies récompenses seront choisies par le parent
-    "Un livre", "Une BD", "Un jeu vidéo", "Une sortie ciné", "Un goûter au restaurant",
-    "Une soirée film au choix", "Une heure d'écran en plus", "Un jeu de société",
+# Liste provisoire : les vraies récompenses seront choisies par le parent. La rareté pilote l'animation d'ouverture.
+RARITY_WEIGHTS = {"common": 50, "rare": 30, "epic": 15, "legendary": 5}
+REWARDS = [
+    {"label": "Une heure d'écran en plus", "rarity": "common", "icon": "⏰"},
+    {"label": "Un jeu de société", "rarity": "common", "icon": "🎲"},
+    {"label": "Une BD", "rarity": "common", "icon": "📖"},
+    {"label": "Un livre", "rarity": "rare", "icon": "📚"},
+    {"label": "Une soirée film au choix", "rarity": "rare", "icon": "🍿"},
+    {"label": "Une sortie ciné", "rarity": "epic", "icon": "🎬"},
+    {"label": "Un goûter au restaurant", "rarity": "epic", "icon": "🍔"},
+    {"label": "Un jeu vidéo", "rarity": "legendary", "icon": "🎮"},
 ]
+BY_LABEL = {r["label"]: r for r in REWARDS}
 
 
 def grade_points(g: float) -> int:
@@ -153,10 +162,13 @@ def ensure_packs(c) -> None:
         c.execute("INSERT OR IGNORE INTO packs (level) VALUES (?)", (lv,))
 
 
-def open_pack(c, level: int, rng=random) -> str | None:
-    reward = rng.choice(REWARDS)
-    ok = c.execute("UPDATE packs SET opened_at = datetime('now'), reward = ? WHERE level = ? AND opened_at IS NULL", (reward, level)).rowcount
-    return reward if ok else None
+def open_pack(c, level: int, rng=random) -> dict | None:
+    """Tire la rareté (pondérée) puis une récompense de cette rareté ; None si le paquet n'existe pas ou est déjà ouvert."""
+    rarity = rng.choices(list(RARITY_WEIGHTS), weights=list(RARITY_WEIGHTS.values()))[0]
+    reward = rng.choice([r for r in REWARDS if r["rarity"] == rarity])
+    ok = c.execute("UPDATE packs SET opened_at = datetime('now'), reward = ?, rarity = ? WHERE level = ? AND opened_at IS NULL",
+                   (reward["label"], reward["rarity"], level)).rowcount
+    return dict(reward) if ok else None
 
 
 def update(c) -> None:
@@ -182,5 +194,5 @@ def overview(c) -> dict:
         d["progress"] = progress(c, m) if m["status"] == "active" else None
         missions.append(d)
     return {**summary(c), "missions": missions,
-            "packs_list": [dict(r) for r in c.execute("SELECT level, opened_at, reward FROM packs ORDER BY level DESC")],
+            "packs_list": [{**dict(r), "icon": BY_LABEL.get(r["reward"], {}).get("icon")} for r in c.execute("SELECT level, opened_at, reward, rarity FROM packs ORDER BY level DESC")],
             "history": [dict(r) for r in c.execute("SELECT at, points, label FROM points ORDER BY id DESC LIMIT 15")]}

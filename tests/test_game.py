@@ -74,15 +74,24 @@ with db.conn() as c:
     c.execute("DELETE FROM points"); game.award(c, "mission", "t1", 25, "test")
     game.ensure_packs(c); game.ensure_packs(c)
     assert [r[0] for r in c.execute("SELECT level FROM packs ORDER BY level")] == [2, 3]
-    r = game.open_pack(c, 2); assert r in game.REWARDS and game.open_pack(c, 2) is None and game.open_pack(c, 9) is None
+    r = game.open_pack(c, 2); assert r in game.REWARDS and c.execute("SELECT rarity FROM packs WHERE level = 2").fetchone()[0] == r["rarity"] and game.open_pack(c, 2) is None and game.open_pack(c, 9) is None
     assert game.summary(c)["packs"] == 1
 
 # --- API ---
 with TestClient(app) as cl:
     g = cl.get("/api/game").json()
     assert g["level"] >= 3 and any(p["level"] == 3 and not p["opened_at"] for p in g["packs_list"]) and g["missions"] and g["history"]
-    assert cl.post("/api/packs/3/open").json()["reward"] in game.REWARDS
+    j = cl.post("/api/packs/3/open").json(); assert j["reward"] in game.BY_LABEL and j["rarity"] in game.RARITY_WEIGHTS and j["icon"]
     assert cl.post("/api/packs/3/open").status_code == 404
     page = cl.get("/").text
+    assert "/static/packfx.js" in page and "/static/packfx.css" in page
+    assert cl.get("/static/packfx.js").status_code == 200 and "PackFX" in cl.get("/static/packfx.js").text
+    assert any(p["opened_at"] and p["rarity"] and p["icon"] for p in cl.get("/api/game").json()["packs_list"]), "récompenses obtenues : rareté et icône"
     assert 'id="goals"' in page and "const GAME = " in page and 'data-view="objectifs"' in page
+import random as _r
+rng = _r.Random(0); seen = {}
+with db.conn() as c:
+    for lv in range(100, 400):
+        c.execute("INSERT INTO packs (level) VALUES (?)", (lv,)); r = game.open_pack(c, lv, rng); seen[r["rarity"]] = seen.get(r["rarity"], 0) + 1
+assert set(seen) == set(game.RARITY_WEIGHTS) and seen["common"] > seen["rare"] > seen["epic"] > seen["legendary"] > 0, seen   # rareté pondérée
 print("OK jeu")

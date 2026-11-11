@@ -171,7 +171,7 @@ def open_pack(level: int):
         reward = game.open_pack(c, level)
     if reward is None:
         raise HTTPException(404, "Paquet introuvable ou déjà ouvert.")
-    return {"level": level, "reward": reward}
+    return {"level": level, "reward": reward["label"], "rarity": reward["rarity"], "icon": reward["icon"]}
 
 
 @app.get("/api/results")

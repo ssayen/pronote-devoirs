@@ -11,16 +11,24 @@
 
   // ---- pastille de niveau et barre sur l'avatar ----
   const wrap = $(".avwrap");
-  const badge = el("span", "lvl"), bar = el("span", "xp"), fill = el("i");
+  const badge = el("button", "lvl"), bar = el("span", "xp"), fill = el("i");
+  badge.type = "button";
   bar.append(fill); wrap.append(badge, bar);
   function paintAvatar(g) {
     badge.textContent = g.level; fill.style.width = g.pct + "%";
     const t = `Niveau ${g.level} · ${g.into} / ${g.per_level} points` + (g.packs ? ` · ${g.packs} paquet${g.packs > 1 ? "s" : ""} à ouvrir` : "");
     wrap.title = t; badge.classList.toggle("gift", g.packs > 0);
+    badge.setAttribute("aria-label", g.packs ? `Niveau ${g.level}, ${g.packs} paquet${g.packs > 1 ? "s" : ""} à ouvrir : voir mes paquets` : `Niveau ${g.level} : voir mes objectifs`);
     bar.setAttribute("role", "progressbar"); bar.setAttribute("aria-label", t);
     bar.setAttribute("aria-valuemin", 0); bar.setAttribute("aria-valuemax", g.per_level); bar.setAttribute("aria-valuenow", g.into);
   }
   paintAvatar(GAME);
+  let wantPacks = false;
+  const scrollPacks = () => { const p = $("#g-packs"); if (!p) return; p.scrollIntoView({ behavior: "smooth", block: "center" }); p.classList.remove("focus"); void p.offsetWidth; p.classList.add("focus"); };
+  badge.onclick = ev => {          // un clic sur la pastille mène aux objectifs, directement aux paquets s'il y en a à ouvrir
+    ev.stopPropagation(); wantPacks = data.packs > 0;
+    if (NAV.current === "objectifs") { refresh(); } else go("objectifs");
+  };
 
   const meter = (pct, cls = "") => { const m = el("div", "meter " + cls), i = el("i"); i.style.width = Math.max(0, Math.min(100, pct)) + "%"; m.append(i); return m; };
 
@@ -36,15 +44,17 @@
 
   function packs(g) {
     const open = g.packs_list.filter(p => !p.opened_at);
-    const sec = el("section", "g-sec");
-    sec.append(el("h2", null, "Paquets"));
+    const sec = el("section", "g-sec g-packs"); sec.id = "g-packs";
+    sec.append(el("h2", null, open.length > 1 ? `Paquets à ouvrir (${open.length})` : "Paquets"));
     if (!open.length) { sec.append(el("p", "g-empty", "Aucun paquet à ouvrir. Un nouveau paquet arrive à chaque niveau gagné.")); return sec; }
     for (const p of open) {
-      const row = el("div", "g-pack");
-      row.append(el("span", "g-gift", "🎁"), el("span", "g-txt", `Paquet du niveau ${p.level}`));
-      if (READONLY) row.append(el("span", "g-sub", "à ouvrir par l'élève"));
+      const row = el("div", "g-pack-card"), art = el("div", "g-pack-art"), txt = el("div", "g-txt");
+      art.append(PackFX.svg());
+      txt.append(`Paquet du niveau ${p.level}`, el("p", "g-sub", "Une récompense t'attend à l'intérieur !"));
+      row.append(art, txt);
+      if (READONLY) row.append(el("span", "g-pack-wait", "à ouvrir par l'élève"));
       else {
-        const b = el("button", "btn primary", "Ouvrir"); b.type = "button";
+        const b = el("button", "g-open", "Ouvrir !"); b.type = "button";
         b.onclick = () => openPack(p.level, b);
         row.append(b);
       }
@@ -59,20 +69,9 @@
       const r = await fetch(`/api/packs/${level}/open`, { method: "POST" });
       if (!r.ok) throw new Error(r.status);
       const j = await r.json();
-      reveal(j.reward);
+      await PackFX.open({ reward: j.reward, rarity: j.rarity, icon: j.icon || "🎁", level });
       await refresh();
     } catch (e) { btn.disabled = false; toast("Impossible d'ouvrir le paquet, réessayer"); }
-  }
-
-  function reveal(reward) {   // fenêtre de découverte de la récompense
-    const d = el("dialog", "g-reveal");
-    const b = el("div", "g-rbody");
-    b.append(el("div", "g-confetti", "🎉"), el("p", "g-sub", "Tu as gagné :"), el("p", "g-reward", reward));
-    const ok = el("button", "btn primary", "Super !"); ok.type = "button";
-    ok.onclick = () => { d.close(); d.remove(); };
-    b.append(ok); d.append(b); document.body.append(d);
-    d.addEventListener("close", () => d.remove());
-    d.showModal();
   }
 
   function missionCard(m) {
@@ -111,7 +110,11 @@
     if (!got.length) return null;
     const sec = el("section", "g-sec"); sec.append(el("h2", null, "Récompenses obtenues"));
     const ul = el("ul", "g-list");
-    for (const p of got) ul.append(el("li", null, `Niveau ${p.level} : ${p.reward}`));
+    for (const p of got) {
+      const li = el("li", "rar rar-" + (p.rarity || "common"));
+      li.append(`${p.icon || "🎁"} Niveau ${p.level} : ${p.reward}`, el("span", "rtag", (PackFX.RARITY[p.rarity] || {}).label || ""));
+      ul.append(li);
+    }
     sec.append(ul); return sec;
   }
 
@@ -154,6 +157,7 @@
     try {
       const r = await fetch("/api/game"); if (!r.ok) throw new Error(r.status);
       data = await r.json(); paintAvatar(data); draw();
+      if (wantPacks) { wantPacks = false; setTimeout(scrollPacks, 60); }
     } catch (e) { /* on garde ce qui est affiché */ }
   }
 

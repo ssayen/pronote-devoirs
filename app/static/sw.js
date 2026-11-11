@@ -1,6 +1,6 @@
 // Service worker : réseau d'abord, dernier état connu hors ligne (page + fichiers statiques).
-const CACHE = "devoirs-v2";
-const SHELL = ["/", "/static/views.js", "/static/results.js", "/static/timetable.js", "/static/objectifs.js", "/static/perso.js"];
+const CACHE = "devoirs-v3";
+const SHELL = ["/", "/static/views.js", "/static/results.js", "/static/timetable.js", "/static/objectifs.js", "/static/packfx.js", "/static/packfx.css", "/static/perso.js"];
 
 self.addEventListener("install", (e) => {
   e.waitUntil(caches.open(CACHE).then((c) => c.addAll(SHELL).catch(() => {})).then(() => self.skipWaiting()));

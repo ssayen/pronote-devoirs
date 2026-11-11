@@ -11,6 +11,7 @@
 <meta name="apple-mobile-web-app-title" content="StudyFun">
 <link rel="icon" href="/favicon.ico" sizes="48x48">
 <link rel="icon" type="image/png" sizes="32x32" href="/static/icons/favicon-32.png">
+<link rel="stylesheet" href="/static/packfx.css">
 <link rel="apple-touch-icon" href="/static/icons/apple-touch-icon.png">
 <style>
   :root { color-scheme: light; --bg:#f4f6fb; --fg:#1f2430; --panel:#ffffff; --col:#e9edf6; --line:#d5dbe8; --late:#c0392b;
@@ -312,8 +313,6 @@
   /* niveau sur l'avatar */
   .avwrap .lvl { position:absolute; right:-.35rem; top:-.35rem; min-width:1.35rem; height:1.35rem; padding:0 .3rem; border-radius:999px; display:grid; place-items:center;
                  background:var(--todo); color:#fff; font-size:.78rem; font-weight:800; line-height:1; border:2px solid var(--bg); pointer-events:none; }
-  .avwrap .lvl.gift { background:var(--doing); animation:giftpulse 1.6s ease-in-out infinite; }
-  @keyframes giftpulse { 50% { transform:scale(1.18); } }
   .avwrap .xp { position:absolute; left:.3rem; right:.3rem; bottom:-.55rem; height:.4rem; border-radius:999px; background:var(--line); overflow:hidden; pointer-events:none; }
   .avwrap .xp i { display:block; height:100%; background:var(--done); border-radius:inherit; transition:width .5s; }
   /* onglet Objectifs */
@@ -330,8 +329,6 @@
   #goals .meter i { display:block; height:100%; border-radius:inherit; background:var(--done); transition:width .5s; }
   #goals .g-sec { background:var(--panel); border:1px solid var(--line); border-radius:16px; padding:1rem 1.2rem; }
   #goals .g-empty { margin:0; opacity:.75; font-size:.92rem; }
-  #goals .g-pack { display:flex; align-items:center; gap:.8rem; padding:.4rem 0; }
-  #goals .g-gift { font-size:1.6rem; } #goals .g-txt { flex:1; font-weight:600; }
   #goals .g-grid { display:grid; grid-template-columns:repeat(auto-fill, minmax(15rem, 1fr)); gap:.8rem; }
   #goals .g-mission { border:1px solid var(--line); border-radius:12px; padding:.8rem .9rem; background:var(--bg); }
   #goals .g-mission.expired { opacity:.6; } #goals .g-mission.done { border-color:var(--done); }
@@ -342,13 +339,8 @@
   #goals .g-past { margin-top:.9rem; } #goals .g-past summary { cursor:pointer; font-size:.9rem; margin-bottom:.6rem; }
   #goals .g-list { margin:0; padding:0; list-style:none; display:grid; gap:.35rem; font-size:.92rem; }
   #goals .g-list b { color:var(--done); margin-right:.2rem; }
-  dialog.g-reveal { border:none; border-radius:18px; padding:0; background:var(--panel); color:var(--fg); box-shadow:0 20px 60px #0006; max-width:min(22rem, 92vw); }
-  dialog.g-reveal::backdrop { background:#0009; }
-  .g-rbody { padding:1.6rem 1.6rem 1.3rem; text-align:center; animation:pop .45s cubic-bezier(.2,1.4,.4,1); }
-  @keyframes pop { from { transform:scale(.6); opacity:0; } }
-  .g-confetti { font-size:3.2rem; } .g-reward { font-size:1.5rem; font-weight:800; margin:.2rem 0 1.2rem; }
   @media (max-width:560px) { #goals .g-level { gap:.8rem; padding:.8rem; } #goals .g-big { width:4.2rem; height:4.2rem; } #goals .g-big b { font-size:1.8rem; } }
-  @media (prefers-reduced-motion: reduce) { .avwrap .lvl.gift, .g-rbody { animation:none; } #goals .meter i, .avwrap .xp i { transition:none; } }
+  @media (prefers-reduced-motion: reduce) { .avwrap .lvl.gift, .avwrap .lvl.gift::after, #goals .g-pack-card, #goals .g-pack-card::before, #goals .g-pack-art, #goals .g-open { animation:none !important; } #goals .meter i, .avwrap .xp i { transition:none; } }
 </style>
 </head>
 <body>
@@ -709,6 +701,7 @@ render();
 <script src="/static/views.js"></script>
 <script src="/static/results.js"></script>
 <script src="/static/timetable.js"></script>
+<script src="/static/packfx.js"></script>
 <script src="/static/objectifs.js"></script>
 <script src="/static/perso.js"></script>
 <script>initViews();</script>
