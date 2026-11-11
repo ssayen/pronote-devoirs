@@ -192,6 +192,9 @@
                background:linear-gradient(135deg, hsl(var(--h) 92% 92%), hsl(var(--h) 80% 84%)); border-left:4px solid hsl(var(--h) 62% 55%);
                box-shadow:0 1px 3px var(--shadow); transition:transform .12s, box-shadow .12s; cursor:default; }
   .tt-lesson:hover { transform:translateY(-1px) scale(1.015); box-shadow:0 6px 14px var(--shadow); z-index:4; overflow:visible; }
+  .tt-lesson.bg { --veil:linear-gradient(90deg, rgba(255,255,255,.94) 0%, rgba(255,255,255,.86) 50%, rgba(255,255,255,.3) 80%, rgba(255,255,255,0) 100%);
+                  background-color:hsl(var(--h) 60% 92%); background-size:cover; background-position:center; }
+  .tt-lesson.bg .tt-subj, .tt-lesson.bg .tt-time, .tt-lesson.bg .tt-meta { max-width:82%; }
   .tt-subj { display:flex; align-items:center; gap:.3rem; font-weight:700; font-size:.82rem; }
   .tt-subj span:last-child { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
   .tt-ico { flex:none; }

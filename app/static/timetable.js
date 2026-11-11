@@ -63,6 +63,9 @@
 
   function lessonEl(l, tall) {
     const e = svc("div", "tt-lesson" + (l.canceled ? " canceled" : "")); e.style.setProperty("--h", hue(l.subject)); e.title = details(l);
+    // même illustration de fond que les cartes de devoirs (voile blanc à gauche pour la lisibilité) ; pas pour un cours annulé (hachuré)
+    const bg = !l.canceled && bgOf(l.subject);
+    if (bg) { e.classList.add("bg"); e.style.backgroundImage = `var(--veil), url(/static/fonds/${bg}.jpg)`; }
     const head = svc("div", "tt-subj"); head.append(svc("span", "tt-ico", icon(l.subject)), svc("span", null, short(l.subject)));
     e.append(head);
     const bs = badges(l);
