@@ -113,6 +113,7 @@ with TestClient(app) as a, TestClient(app) as b:
         assert [h["subject"] for h in p.get("/api/homework").json()] == ["Perso"], "le parent voit les données de l'élève lié (bob)"
         page = p.get("/", headers=H).text
         assert 'data-readonly="1"' in page and 'data-role="parent"' in page
+        assert "data-child=" in page
         for method, url, kw in [("post", "/api/cards", {"json": {"subject": "x", "description": "y", "due_date": "2030-01-01"}}),
                                 ("put", "/api/settings", {"json": {"theme": "dark"}}), ("post", "/sync", {}), ("post", "/api/reconnect", {"json": {}}),
                                 ("post", "/api/parent-invite", {}), ("post", "/move/old", {}), ("post", "/api/packs/2/open", {})]:

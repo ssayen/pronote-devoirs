@@ -6,6 +6,8 @@
   const byId = Object.fromEntries(AVATARS.map(a => [a.id, a]));
   let avatar = byId[SETTINGS.avatar] ? SETTINGS.avatar : null;
   let theme = SETTINGS.theme || "auto";
+  const RO = document.documentElement.hasAttribute("data-readonly");              // parent : consultation du profil de l'enfant
+  const kid = document.documentElement.dataset.child || "votre enfant";
   const src = id => `/static/avatars/${id}.jpg`;
 
   function paintButton() {
@@ -13,10 +15,10 @@
     btn.classList.toggle("empty", !avatar);
     if (avatar) {
       const i = el("img"); i.src = src(avatar); i.alt = ""; btn.append(i);
-      btn.title = `Mon profil (avatar : ${byId[avatar].name})`; btn.setAttribute("aria-label", btn.title);
+      btn.title = (RO ? `Profil de ${kid}` : "Mon profil") + ` (avatar : ${byId[avatar].name})`; btn.setAttribute("aria-label", btn.title);
     } else {
       btn.append(el("span", null, "?"));
-      btn.title = "Mon profil (aucun avatar choisi)"; btn.setAttribute("aria-label", btn.title);
+      btn.title = (RO ? `Profil de ${kid}` : "Mon profil") + " (aucun avatar choisi)"; btn.setAttribute("aria-label", btn.title);
     }
   }
 
@@ -72,19 +74,25 @@
     root.replaceChildren();
     const head = el("div", "pv-head");
     const back = el("button", "chip", "‹ Retour"); back.type = "button"; back.onclick = goBack;
-    head.append(back, el("h2", "tt-title", "Personnalisation"));
+    head.append(back, el("h2", "tt-title", RO ? `Profil de ${kid}` : "Personnalisation"));
     root.append(head);
 
     const card = el("section", "rcard");
-    card.append(el("h2", null, "Mon avatar"));
+    card.append(el("h2", null, RO ? "Avatar" : "Mon avatar"));
     const cur = el("div", "av-current");
     const big = el("span", "av-face big" + (avatar ? "" : " none"));
     if (avatar) { const i = el("img"); i.src = src(avatar); i.alt = ""; big.append(i); } else big.append("?");
     const txt = el("div");
     txt.append(el("b", null, avatar ? byId[avatar].name : "Pas encore d'avatar"),
-               el("div", "hint", avatar ? "Visible en haut à droite de l'écran." : "Choisir une image ci-dessous : elle s'affichera en haut à droite."));
+               el("div", "hint", RO ? (avatar ? "Choisi par " + kid + " (lecture seule)." : "Pas encore choisi.") : avatar ? "Visible en haut à droite de l'écran." : "Choisir une image ci-dessous : elle s'affichera en haut à droite."));
     cur.append(big, txt); card.append(cur);
 
+    if (RO) {   // lecture seule : ni galerie ni thème
+      root.append(card);
+      const look = el("section", "rcard"); look.append(el("h2", null, "Apparence"));
+      look.append(el("div", "hint", `Thème : ${THEMES.find(x => x[0] === theme)[1].toLowerCase()}`)); root.append(look);
+      return;
+    }
     if (!AVATARS.length) { card.append(el("div", "rempty", "Aucun avatar disponible.")); root.append(card); return; }
     const grid = el("div", "av-grid"); grid.setAttribute("role", "group"); grid.setAttribute("aria-label", "Galerie d'avatars");
     for (const a of AVATARS) grid.append(tile(a.id, a.name));
@@ -112,7 +120,7 @@
     { label: "Apparence (clair / sombre)", icon: () => null, mark: "◐", action: () => { go("perso"); setTimeout(() => { const l = $("#look"); if (l) l.scrollIntoView({ behavior: "smooth", block: "start" }); }, 50); } },
   ];
   const account = document.documentElement.dataset.account, role = document.documentElement.dataset.role;
-  if (document.documentElement.hasAttribute("data-readonly")) MENU.length = 0;   // parent : pas de personnalisation de l'élève
+  if (RO) { MENU.length = 0; MENU.push({ label: `Profil de ${kid}`, icon: () => (avatar ? src(avatar) : null), mark: "👤", action: () => go("perso") }); }   // parent : consultation seule
   if (role === "student" || role === "admin") MENU.push({ label: "Inviter un parent", icon: () => null, mark: "👪", action: async () => {
     try {
       const r = await fetch("/api/parent-invite", { method: "POST" });

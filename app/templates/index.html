@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="fr"{% if account %} data-account="{{ account }}" data-role="{{ role }}"{% endif %}{% if readonly %} data-readonly="1"{% endif %}{% if settings.theme in ('light', 'dark') %} data-theme="{{ settings.theme }}"{% endif %}>
+<html lang="fr"{% if account %} data-account="{{ account }}" data-role="{{ role }}"{% endif %}{% if readonly %} data-readonly="1" data-child="{{ child }}"{% endif %}{% if settings.theme in ('light', 'dark') %} data-theme="{{ settings.theme }}"{% endif %}>
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
