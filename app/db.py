@@ -95,7 +95,9 @@ CREATE TABLE IF NOT EXISTS grades (       -- notes individuelles ; grade / class
     coef      REAL,
     class_avg REAL,
     max       REAL,
-    comment   TEXT
+    comment   TEXT,
+    first_seen TEXT,                      -- date d'arrivée dans l'app (la date de la note, elle, peut être ancienne)
+    seen_at   TEXT                        -- NULL tant que l'élève n'a pas vu la note
 );
 CREATE TABLE IF NOT EXISTS points (       -- journal des points : on n'y fait qu'ajouter ; « ref » unique = une seule attribution par événement
     id     INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -178,6 +180,11 @@ def init() -> None:
                 if name == "pronote_done":
                     c.execute("UPDATE homework SET pronote_done = done")
 
+        gcols = {r["name"] for r in c.execute("PRAGMA table_info(grades)")}
+        if "seen_at" not in gcols:   # notes déjà connues avant cette fonction : considérées comme vues
+            c.execute("ALTER TABLE grades ADD COLUMN first_seen TEXT")
+            c.execute("ALTER TABLE grades ADD COLUMN seen_at TEXT")
+            c.execute("UPDATE grades SET first_seen = datetime('now'), seen_at = datetime('now')")
         if "rarity" not in {r["name"] for r in c.execute("PRAGMA table_info(packs)")}:
             c.execute("ALTER TABLE packs ADD COLUMN rarity TEXT")
         if "delivered_at" not in {r["name"] for r in c.execute("PRAGMA table_info(packs)")}:

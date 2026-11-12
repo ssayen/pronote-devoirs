@@ -65,7 +65,7 @@ def seed_grades() -> None:
     with db.conn() as c:
         for i, (subj, g, ago) in enumerate(notes):
             d = (date.today() - timedelta(days=ago)).isoformat()
-            c.execute("INSERT OR REPLACE INTO grades (id, period, subject, date, grade, out_of, coef, class_avg, max) VALUES (?,?,?,?,?,20,1,12.5,18)",
+            c.execute("INSERT OR REPLACE INTO grades (id, period, subject, date, grade, out_of, coef, class_avg, max, first_seen, seen_at) VALUES (?,?,?,?,?,20,1,12.5,18,datetime('now'),datetime('now'))",
                       (f"demo{i}", "Trimestre 2", subj, d, g))
         c.execute("INSERT OR REPLACE INTO settings (key, value) VALUES ('game_since', ?)", ((date.today() - timedelta(days=20)).isoformat(),))
         game.update(c)

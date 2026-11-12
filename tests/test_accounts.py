@@ -116,7 +116,7 @@ with TestClient(app) as a, TestClient(app) as b:
         assert "data-child=" in page
         for method, url, kw in [("post", "/api/cards", {"json": {"subject": "x", "description": "y", "due_date": "2030-01-01"}}),
                                 ("put", "/api/settings", {"json": {"theme": "dark"}}), ("post", "/sync", {}), ("post", "/api/reconnect", {"json": {}}),
-                                ("post", "/api/parent-invite", {}), ("post", "/move/old", {}), ("post", "/api/packs/2/open", {})]:
+                                ("post", "/api/parent-invite", {}), ("post", "/move/old", {}), ("post", "/api/packs/2/open", {}), ("post", "/api/grades/seen", {"json": {}})]:
             assert getattr(p, method)(url, **kw).status_code == 403, url
         assert b.get("/api/settings").json()["theme"] == "dark" and len(b.get("/api/homework").json()) == 1
         assert reg(p, "papa", role="parent", link=code, image=B64P, pin="1234").status_code == 403, "code à usage unique"

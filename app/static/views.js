@@ -2,7 +2,7 @@
 // Chaque section enregistre { el, draw, show? } dans VIEWS ; draw() n'est appelé qu'à la première ouverture.
 // La section ouverte est dans l'adresse (#resultats, #edt, #perso) : le bouton « retour » du navigateur fonctionne.
 const VIEWS = {};
-const HASH = { resultats: "#resultats", edt: "#edt", perso: "#perso", objectifs: "#objectifs" };
+const HASH = { resultats: "#resultats", edt: "#edt", perso: "#perso", objectifs: "#objectifs", notes: "#notes" };
 const NAV = { current: null, previous: null };   // section affichée et section précédente
 let showView = () => {};
 
@@ -19,6 +19,7 @@ function initViews() {
   const drawn = new Set();
   const panel = n => (n === "devoirs" ? $("#v-devoirs") : VIEWS[n].el);
   showView = v => {
+    if (v !== NAV.current && NAV.current && NAV.current !== "devoirs" && VIEWS[NAV.current].hide) VIEWS[NAV.current].hide();   // quitter une section
     if (v !== NAV.current) { NAV.previous = NAV.current; NAV.current = v; }
     for (const n of names) panel(n).hidden = n !== v;
     for (const id of ["add", "late"]) $("#" + id).hidden = v !== "devoirs";

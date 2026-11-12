@@ -43,6 +43,10 @@ les garde en local et renvoie le statut « terminé » vers Pronote.
 - Liaison : à l'inscription, le parent est rattaché automatiquement à l'élève dont l'identifiant Pronote figure parmi ses enfants (à défaut : même nom, classe et établissement). Secours : l'élève génère un code (menu de l'avatar → « Inviter un parent », valable 7 jours, usage unique) que le parent saisit en plus de son QR code. L'élève doit s'être connecté avec son QR code avant.
 - Pour passer un compte existant d'un jeton parent à un jeton élève sans perdre l'historique : « Reconnecter Pronote » avec le QR code de l'élève (les cartes, l'avatar et les réglages sont conservés).
 
+## Notes (flux et « pas encore vues »)
+
+Onglet « Notes » : toutes les notes (sur 20) avec date, coefficient, moyenne et max de la classe, commentaire. Une note qui arrive à la synchronisation est « non vue » **même si sa date est ancienne** (un enseignant peut saisir une note datée d'il y a un mois) : l'état est stocké côté serveur, dans la base de l'élève (colonnes `first_seen` et `seen_at` de `grades`, quelques octets par note, rien à synchroniser entre appareils). Les notes déjà connues au déploiement, ou lues à la toute première synchronisation, sont considérées comme vues. Elles sont mises en avant (section « Nouvelles notes », pastille rouge sur l'onglet) et marquées vues quand l'élève quitte l'onglet ou clique sur « Tout marquer comme vu ». Le parent voit ce qui n'a pas encore été vu, sans rien modifier.
+
 ## Objectifs (gamification)
 
 - **Points :** chaque note de 16 ou plus (ramenée sur 20) rapporte 1 point (16-17), 2 (18-19) ou 3 (20) ; une mission réussie rapporte 1 à 3 points selon sa difficulté. Seules les notes postérieures à l'activation comptent (pas de rattrapage de l'historique). Le journal `points` est la source de vérité, une référence unique par événement évite tout doublon.

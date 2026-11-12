@@ -292,6 +292,17 @@
   .menu .m-ico { width:1.6rem; height:1.6rem; border-radius:50%; overflow:hidden; display:grid; place-items:center; background:var(--bg); flex:none; font-weight:800; font-size:.9rem; }
   .menu .m-ico img { width:100%; height:100%; object-fit:cover; }
   /* choix du thème (vue Personnalisation) */
+  /* onglet Notes : flux de notes, les non vues sont mises en avant */
+  #notes { max-width:48rem; margin:0 auto; }
+  .nbadge { display:inline-block; min-width:1.2rem; margin-left:.4rem; padding:0 .3rem; border-radius:999px; background:var(--late, #d93025); color:#fff; font-size:.72rem; line-height:1.2rem; text-align:center; }
+  .nbadge[hidden] { display:none; }
+  .nlist { margin:0; padding:0; list-style:none; display:grid; gap:.5rem; }
+  .nrow { display:flex; align-items:center; justify-content:space-between; gap:.8rem; padding:.6rem .8rem; border:1px solid var(--line); border-radius:10px; background:var(--panel); }
+  .nrow.new { border-color:var(--todo); background:color-mix(in srgb, var(--todo) 10%, var(--panel)); box-shadow:0 0 0 1px var(--todo) inset; }
+  .n-main { min-width:0; } .n-subj { font-weight:700; } .n-meta { font-size:.82rem; opacity:.7; margin-top:.1rem; } .n-com { font-size:.85rem; font-style:italic; margin-top:.2rem; opacity:.85; }
+  .n-new { margin-left:.5rem; padding:.05rem .45rem; border-radius:999px; background:var(--todo); color:#fff; font-size:.7rem; font-weight:700; text-transform:uppercase; letter-spacing:.04em; vertical-align:middle; }
+  .n-val { flex:none; font-size:1.5rem; font-weight:800; font-variant-numeric:tabular-nums; } .n-val small { font-size:.75rem; font-weight:600; opacity:.6; margin-left:.1rem; }
+  .n-val.up { color:var(--done); } .n-val.down { color:var(--late); }
   .rcard + .rcard { margin-top:1rem; }
   .th-grid { display:grid; grid-template-columns:repeat(auto-fit, minmax(9rem, 1fr)); gap:.9rem; }
   .th-opt { position:relative; border:2px solid var(--line); background:var(--bg); color:var(--fg); font:inherit; border-radius:14px; padding:.6rem; cursor:pointer; text-align:center; transition:transform .12s, border-color .12s; }
@@ -349,6 +360,7 @@
   <div class="views" role="tablist" aria-label="Section">
     <button role="tab" id="tab-devoirs" aria-selected="true" aria-controls="v-devoirs" data-view="devoirs">Devoirs</button>
     <button role="tab" id="tab-resultats" aria-selected="false" aria-controls="results" data-view="resultats">Résultats</button>
+    <button role="tab" id="tab-notes" aria-selected="false" aria-controls="notes" data-view="notes">Notes<span class="nbadge" id="nbadge" hidden></span></button>
     <button role="tab" id="tab-edt" aria-selected="false" aria-controls="timetable" data-view="edt">Emploi du temps</button>
     <button role="tab" id="tab-objectifs" aria-selected="false" aria-controls="goals" data-view="objectifs">Objectifs</button>
   </div>
@@ -373,6 +385,7 @@
 </div>
 
 <main id="results" role="tabpanel" aria-labelledby="tab-resultats" hidden></main>
+<main id="notes" role="tabpanel" aria-labelledby="tab-notes" hidden></main>
 <main id="timetable" role="tabpanel" aria-labelledby="tab-edt" hidden></main>
 <main id="goals" role="tabpanel" aria-labelledby="tab-objectifs" hidden></main>
 <main id="v-perso" aria-label="Personnalisation" hidden></main>
@@ -444,6 +457,7 @@
 const CARDS = {{ cards|tojson }};
 const TODAY = {{ today|tojson }};
 const RESULTS = {{ results|tojson }};
+const GRADES = {{ grades|tojson }};
 const GAME = {{ game|tojson }};
 const LESSONS = {{ lessons|tojson }};
 const SETTINGS = {{ settings|tojson }};
@@ -700,6 +714,7 @@ render();
 </script>
 <script src="/static/views.js"></script>
 <script src="/static/results.js"></script>
+<script src="/static/notes.js"></script>
 <script src="/static/timetable.js"></script>
 <script src="/static/packfx.js"></script>
 <script src="/static/objectifs.js"></script>

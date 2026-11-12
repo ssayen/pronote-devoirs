@@ -82,6 +82,30 @@ def results_data() -> dict:
     return {"periods": out}
 
 
+def grades_data() -> list[dict]:
+    """Flux de notes (sur 20), les plus récentes d'abord. « unseen » : l'élève ne les a pas encore vues (indépendamment de leur date)."""
+    with db.conn() as c:
+        rows = c.execute("SELECT id, period, subject, date, grade, out_of, coef, class_avg, max, comment, substr(first_seen, 1, 10) AS added, "
+                         "(seen_at IS NULL) AS unseen FROM grades ORDER BY date DESC, first_seen DESC, id").fetchall()
+    return [dict(r) for r in rows]
+
+
+class SeenIn(BaseModel):
+    ids: list[str] | None = Field(default=None, max_length=2000)   # absent : toutes les notes
+
+
+@app.post("/api/grades/seen")
+def api_grades_seen(body: SeenIn):
+    """Marque des notes (ou toutes) comme vues. Bloqué pour le parent (lecture seule) par le contrôle d'accès."""
+    with db.conn() as c:
+        if body.ids is None:
+            c.execute("UPDATE grades SET seen_at = datetime('now') WHERE seen_at IS NULL")
+        else:
+            c.executemany("UPDATE grades SET seen_at = datetime('now') WHERE id = ? AND seen_at IS NULL", [(i,) for i in body.ids])
+        n = c.execute("SELECT COUNT(*) FROM grades WHERE seen_at IS NULL").fetchone()[0]
+    return {"unseen": n}
+
+
 def avatar_list() -> list[dict]:
     """Avatars disponibles : app/static/avatars/avatars.json (écrit par scripts/build_avatars.py), image présente."""
     folder = Path(__file__).parent / "static" / "avatars"
@@ -233,7 +257,7 @@ def index(request: Request):
     return templates.TemplateResponse(
         request,
         "index.html",
-        {"cards": cards, "results": results_data(), "game": gm, "lessons": lessons_data(), "settings": settings_data(), "avatars": avatar_list(), "last": last, "today": date.today().isoformat(),
+        {"cards": cards, "results": results_data(), "grades": grades_data(), "game": gm, "lessons": lessons_data(), "settings": settings_data(), "avatars": avatar_list(), "last": last, "today": date.today().isoformat(),
          "child": sync.display_name(), "account": (request.state.user or {}).get("login", ""),
          "role": (request.state.user or {}).get("role", "student"), "readonly": getattr(request.state, "readonly", False), "push": sync.push_enabled(),
          "keep_days": DONE_KEEP_DAYS, "auth_problem": bool(last and last["kind"] == "auth"),

@@ -224,8 +224,14 @@ def _sync_grades(client) -> int:
             rows.append((f"{base}-{k}", p.name, g.subject.name, d, val, _num(g.out_of), _num(g.coefficient),
                          _num(g.average, g.out_of), _num(g.max, g.out_of), g.comment or None))
         with db.conn() as c:
-            c.executemany("INSERT OR REPLACE INTO grades (id, period, subject, date, grade, out_of, coef, class_avg, max, comment) "
-                          "VALUES (?,?,?,?,?,?,?,?,?,?)", rows)
+            # toute première lecture des notes : l'historique n'est pas « nouveau » ; ensuite, une note inconnue est « non vue »
+            first = c.execute("SELECT 1 FROM grades LIMIT 1").fetchone() is None and not c.execute("SELECT 1 FROM settings WHERE key = 'grades_init'").fetchone()
+            c.executemany("INSERT INTO grades (id, period, subject, date, grade, out_of, coef, class_avg, max, comment, first_seen, seen_at) "
+                          "VALUES (?,?,?,?,?,?,?,?,?,?,datetime('now'), " + ("datetime('now')" if first else "NULL") + ") "
+                          "ON CONFLICT(id) DO UPDATE SET period=excluded.period, subject=excluded.subject, date=excluded.date, grade=excluded.grade, "
+                          "out_of=excluded.out_of, coef=excluded.coef, class_avg=excluded.class_avg, max=excluded.max, comment=excluded.comment", rows)
+            if first:
+                c.execute("INSERT OR REPLACE INTO settings (key, value) VALUES ('grades_init', '1')")
         n += len(rows)
     return n
 
