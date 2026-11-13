@@ -9,3 +9,5 @@ data-dev/
 /avatars/
 # fonds saisonniers sources (~9 Mo) : seules les versions web de app/static/saisons/ sont versionnées
 /fond-*.png
+# images sources du paquet : seules les versions web de app/static/paquet/ sont versionnées
+/paquet-*.png

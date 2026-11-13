@@ -23,4 +23,6 @@ with TestClient(app) as c:
     for n in ("noel", "hiver", "printemps", "ete", "automne"):
         r = c.get(f"/static/saisons/{n}.jpg"); assert r.status_code == 200 and r.headers["content-type"] == "image/jpeg" and len(r.content) < 400_000, n
         assert f'"{n}"' in h and f"/static/saisons/{n}.jpg" in h, n
+    for n in ("complet", "corps", "couvercle"):   # images du paquet (animation d'ouverture)
+        r = c.get(f"/static/paquet/{n}.webp"); assert r.status_code == 200 and r.headers["content-type"] == "image/webp" and len(r.content) < 200_000, n
 print("ok PWA")

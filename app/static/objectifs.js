@@ -49,7 +49,7 @@
     if (!open.length) { sec.append(el("p", "g-empty", "Aucun paquet à ouvrir. Un nouveau paquet arrive à chaque niveau gagné.")); return sec; }
     for (const p of open) {
       const row = el("div", "g-pack-card"), art = el("div", "g-pack-art"), txt = el("div", "g-txt");
-      art.append(PackFX.svg());
+      art.append(PackFX.pack(true));
       txt.append(`Paquet du niveau ${p.level}`, el("p", "g-sub", "Une récompense t'attend à l'intérieur !"));
       row.append(art, txt);
       if (READONLY) row.append(el("span", "g-pack-wait", "à ouvrir par l'élève"));

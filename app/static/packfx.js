@@ -1,6 +1,6 @@
 // Ouverture de paquet en plein écran : arrivée, charge (le paquet tremble, la lumière monte), flash, explosion de particules,
 // apparition de la carte récompense aux couleurs de sa rareté. PackFX.open({ reward, rarity, icon, level }) -> Promise (fin de l'animation).
-// PackFX.svg() renvoie le dessin du paquet (réutilisé dans la liste des paquets).
+// PackFX.pack() renvoie l'image du paquet (réutilisée dans la liste des paquets).
 const PackFX = (() => {
   const RARITY = {
     common:    { label: "Commun",     color: "#9fb0c3", glow: "#c9d6e4", power: 0.6 },
@@ -127,32 +127,19 @@ const PackFX = (() => {
   const SVGNS = "http://www.w3.org/2000/svg";
   let uid = 0;
 
-  function svg() {   // le paquet : un coffret violet aux arêtes dorées ; couvercle et joint lumineux animés séparément
-    const n = ++uid;
-    const box = document.createElementNS(SVGNS, "svg");
-    box.setAttribute("viewBox", "0 0 220 250"); box.setAttribute("class", "pfx-svg"); box.setAttribute("aria-hidden", "true");
-    box.innerHTML = `
-      <defs>
-        <linearGradient id="pfL${n}" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#5a33c0"/><stop offset="1" stop-color="#22114d"/></linearGradient>
-        <linearGradient id="pfR${n}" x1="1" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#7143e0"/><stop offset="1" stop-color="#2d1768"/></linearGradient>
-        <linearGradient id="pfT${n}" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#a77bff"/><stop offset="1" stop-color="#6a3fd6"/></linearGradient>
-        <linearGradient id="pfG${n}" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#fff3b0"/><stop offset="1" stop-color="#ffb800"/></linearGradient>
-      </defs>
-      <g class="pfx-body" stroke="#ffd45a" stroke-width="3" stroke-linejoin="round">
-        <polygon points="20,100 110,145 110,235 20,190" fill="url(#pfL${n})"/>
-        <polygon points="200,100 110,145 110,235 200,190" fill="url(#pfR${n})"/>
-        <g transform="matrix(1 .5 0 1 0 0)"><polygon points="65,126 78,152 65,178 52,152" transform="translate(0,-6)" fill="url(#pfG${n})" stroke="none"/></g>
-        <g transform="matrix(1 -.5 0 1 0 0)"><polygon points="155,244 168,270 155,296 142,270" transform="translate(0,-6)" fill="url(#pfG${n})" stroke="none"/></g>
-      </g>
-      <g class="pfx-lid" stroke="#ffd45a" stroke-width="3" stroke-linejoin="round">
-        <polygon points="110,55 200,100 110,145 20,100" fill="url(#pfT${n})"/>
-        <polygon points="110,74 164,100 110,126 56,100" fill="none" stroke-width="2" opacity=".85"/>
-        <polygon points="20,100 110,145 110,160 20,115" fill="#3a1f84"/>
-        <polygon points="200,100 110,145 110,160 200,115" fill="#4a2aa3"/>
-      </g>
-      <polygon class="pfx-leak" points="20,108 110,153 200,108 200,114 110,159 20,114" fill="#fff"/>`;
+  // Le paquet : trois images superposées (app/static/paquet/, voir scripts/build_paquet.py). Au repos on voit « complet » ;
+  // à la charge, « complet » s'efface et laisse voir le corps + le couvercle, entre lesquels filtre la lumière ; à l'explosion le couvercle saute.
+  const PACK_IMGS = ["complet", "corps", "couvercle"].map(n => `/static/paquet/${n}.webp`);
+  function pack(simple = false) {
+    const box = document.createElement("div"); box.className = "pfx-img"; box.setAttribute("aria-hidden", "true");
+    const img = (n, cls) => { const i = new Image(); i.src = `/static/paquet/${n}.webp`; i.alt = ""; i.draggable = false; i.className = cls; return i; };
+    if (simple) { box.append(img("complet", "pfx-whole")); return box; }
+    const leak = document.createElement("div"); leak.className = "pfx-leak";
+    box.append(img("corps", "pfx-body"), leak, img("couvercle", "pfx-lid"), img("complet", "pfx-whole"));
     return box;
   }
+  const preload = () => PACK_IMGS.forEach(u => { const i = new Image(); i.src = u; });
+  setTimeout(preload, 1500);
 
   function open({ reward, rarity = "common", icon = "🎁", level }) {
     return new Promise(resolve => {
@@ -183,7 +170,7 @@ const PackFX = (() => {
         <button type="button" class="pfx-skip">Passer</button>
         <button type="button" class="btn primary pfx-done">Super !</button>`;
       root.querySelector(".pfx-name").textContent = reward;
-      const packEl = root.querySelector(".pfx-pack"); packEl.append(svg());
+      const packEl = root.querySelector(".pfx-pack"); packEl.append(pack());
       const leak = packEl.querySelector(".pfx-leak");
       const canvas = root.querySelector(".pfx-canvas"), g = canvas.getContext("2d");
       const snd = sounds(R.power, rarity);
@@ -331,10 +318,14 @@ const PackFX = (() => {
         root.classList.add("calm", "burst", "reveal", "done"); phase = "done"; root.querySelector(".pfx-skip").hidden = true;
         root.querySelector(".pfx-done").focus(); return;
       }
-      if (actx) snd.drop(actx.currentTime);
-      t0 = performance.now(); raf = requestAnimationFrame(frame);
       root.querySelector(".pfx-skip").focus();
-      later(() => go("charge"), 800);
+      // on attend (au plus 1,2 s) que les images soient décodées : le paquet ne doit pas apparaître en retard pendant sa chute
+      Promise.race([Promise.all([...packEl.querySelectorAll("img")].map(i => i.decode().catch(() => {}))), new Promise(r => setTimeout(r, 1200))]).then(() => {
+        if (closed) return;
+        if (actx) snd.drop(actx.currentTime);
+        t0 = performance.now(); raf = requestAnimationFrame(frame);
+        later(() => go("charge"), 800);
+      });
     });
   }
 
@@ -405,5 +396,5 @@ const PackFX = (() => {
     });
   }
 
-  return { open, celebrate, svg, unlock, RARITY, _makeSound: makeSound };
+  return { open, celebrate, pack, unlock, RARITY, _makeSound: makeSound };
 })();
