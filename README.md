@@ -64,6 +64,10 @@ Onglet « Notes » : toutes les notes (sur 20) avec date, coefficient, moyenne e
   Seules les notes postérieures au début de la mission comptent.
 - **Affichage :** onglet « Objectifs », niveau et barre de progression sur l'avatar (le parent consulte, sans ouvrir les paquets).
 
+### Remise à plat des objectifs d'un élève
+
+Quand les barèmes changent, `docker compose exec app python -m app.reset_game <identifiant> --after 2026-09-29` simule (rien n'est écrit), puis avec `--apply` : sauvegarde la base (`devoirs.db.avant-reset-<date>` dans le dossier de l'utilisateur), supprime les missions actives et en tire 3 nouvelles, compte dans les points les notes datées après la date donnée (sans doublon avec les points déjà attribués) et les remet en « pas encore vues ». Niveaux et paquets suivent.
+
 ### Compte administrateur (tests)
 
 - `docker compose exec app python -m app.admin create <identifiant>` (le mot de passe est demandé) crée un compte qui se comporte comme un élève, sans QR code ni synchro Pronote, avec des données de démonstration (moyennes, emploi du temps, notes).
