@@ -118,7 +118,8 @@ CREATE TABLE IF NOT EXISTS missions (
     started_at TEXT NOT NULL,             -- AAAA-MM-JJ : seules les notes postérieures comptent
     expires_at TEXT NOT NULL,
     status     TEXT NOT NULL DEFAULT 'active',   -- active | done | expired
-    done_at    TEXT
+    done_at    TEXT,
+    celebrated_at TEXT                    -- NULL tant que l'élève n'a pas vu la célébration d'une mission réussie
 );
 CREATE TABLE IF NOT EXISTS packs (        -- un paquet par niveau atteint
     level      INTEGER PRIMARY KEY,
@@ -185,6 +186,9 @@ def init() -> None:
             c.execute("ALTER TABLE grades ADD COLUMN first_seen TEXT")
             c.execute("ALTER TABLE grades ADD COLUMN seen_at TEXT")
             c.execute("UPDATE grades SET first_seen = datetime('now'), seen_at = datetime('now')")
+        if "celebrated_at" not in {r["name"] for r in c.execute("PRAGMA table_info(missions)")}:   # missions déjà réussies : pas de célébration rétroactive
+            c.execute("ALTER TABLE missions ADD COLUMN celebrated_at TEXT")
+            c.execute("UPDATE missions SET celebrated_at = datetime('now') WHERE status != 'active'")
         if "rarity" not in {r["name"] for r in c.execute("PRAGMA table_info(packs)")}:
             c.execute("ALTER TABLE packs ADD COLUMN rarity TEXT")
         if "delivered_at" not in {r["name"] for r in c.execute("PRAGMA table_info(packs)")}:

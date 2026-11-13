@@ -245,7 +245,12 @@ def update(c) -> None:
 def summary(c) -> dict:
     info = level_info(total_points(c))
     info["packs"] = c.execute("SELECT COUNT(*) FROM packs WHERE opened_at IS NULL").fetchone()[0]
+    info["celebrate"] = [dict(r) for r in c.execute("SELECT id, label, points FROM missions WHERE status = 'done' AND celebrated_at IS NULL ORDER BY done_at, id LIMIT 5")]
     return info
+
+
+def mark_celebrated(c, ids: list[int]) -> None:
+    c.executemany("UPDATE missions SET celebrated_at = datetime('now') WHERE id = ? AND status = 'done' AND celebrated_at IS NULL", [(i,) for i in ids])
 
 
 def overview(c) -> dict:

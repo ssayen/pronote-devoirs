@@ -164,7 +164,18 @@
       };
       row.append(b);
     }
-    sec.append(row); return sec;
+    sec.append(row);
+    const row2 = el("div", "g-adm");
+    row2.append(el("span", "g-sub", "Tester la célébration :"));
+    const t = el("button", "btn", "🏆 Simuler une mission réussie (+5 pts)"); t.type = "button";
+    t.onclick = async () => {
+      try {
+        const r = await fetch("/api/admin/mission-done", { method: "POST" });
+        if (!r.ok) throw new Error(r.status);
+        await refresh();      // la célébration s'affiche au rafraîchissement
+      } catch (e) { toast("Impossible de simuler la mission"); }
+    };
+    row2.append(t); sec.append(row2); return sec;
   }
 
   function draw() {
@@ -178,9 +189,35 @@
   async function refresh() {
     try {
       const r = await fetch("/api/game"); if (!r.ok) throw new Error(r.status);
-      data = await r.json(); paintAvatar(data); draw();
+      data = await r.json(); paintAvatar(data); draw(); celebrate(data);
       if (wantPacks) { wantPacks = false; setTimeout(scrollPacks, 60); }
     } catch (e) { /* on garde ce qui est affiché */ }
+  }
+
+  // ---- célébration des missions réussies, à la prochaine ouverture (l'état « déjà célébrée » est côté serveur : une seule fois, quel que soit l'appareil) ----
+  let celebrating = false;
+  async function celebrate(g) {
+    if (READONLY || celebrating || !g || !g.celebrate || !g.celebrate.length) return;
+    celebrating = true;
+    try {
+      const list = g.celebrate;
+      fetch("/api/missions/celebrated", { method: "POST", headers: JSON_HDR, body: JSON.stringify({ ids: list.map(m => m.id) }) }).catch(() => {});
+      let goPacks = false;
+      for (let i = 0; i < list.length; i++) {
+        const last = i === list.length - 1;
+        const r = await PackFX.celebrate({ label: list[i].label, points: list[i].points, packs: last ? g.packs : 0 });
+        if (r === "packs") { goPacks = true; break; }
+      }
+      if (goPacks) { wantPacks = true; if (NAV.current === "objectifs") refresh(); else go("objectifs"); }
+      else if (NAV.current === "objectifs") refresh();
+    } finally { celebrating = false; }
+  }
+  async function check() {          // au retour dans l'app : la synchro a pu valider une mission entre-temps
+    try { const r = await fetch("/api/game"); if (r.ok) { data = await r.json(); paintAvatar(data); celebrate(data); } } catch (e) { /* hors ligne */ }
+  }
+  if (!READONLY) {
+    setTimeout(() => celebrate(GAME), 700);
+    document.addEventListener("visibilitychange", () => { if (document.visibilityState === "visible") check(); });
   }
 
   VIEWS.objectifs = { el: root, draw, show: refresh };

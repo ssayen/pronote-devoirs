@@ -64,6 +64,10 @@ Onglet « Notes » : toutes les notes (sur 20) avec date, coefficient, moyenne e
   Seules les notes postérieures au début de la mission comptent.
 - **Affichage :** onglet « Objectifs », niveau et barre de progression sur l'avatar (le parent consulte, sans ouvrir les paquets).
 
+### Célébration d'une mission réussie
+
+Quand une mission est validée (à la synchro), l'élève la voit célébrée **à la prochaine ouverture de l'app** (ou au retour dans l'app) : trophée, confettis, points gagnés, petit « ta-da » synthétisé et, s'il y a un paquet à ouvrir, un bouton pour aller l'ouvrir. Une seule fois par mission, quel que soit l'appareil (colonne `celebrated_at` de `missions`, `POST /api/missions/celebrated`) ; les missions déjà réussies avant cette fonction ne sont pas célébrées. Le parent ne voit pas la célébration (elle reste pour l'élève).
+
 ### Remise à plat des objectifs d'un élève
 
 Quand les barèmes changent, `docker compose exec app python -m app.reset_game <identifiant> --after 2026-09-29` simule (rien n'est écrit), puis avec `--apply` : sauvegarde la base (`devoirs.db.avant-reset-<date>` dans le dossier de l'utilisateur), supprime les missions actives et en tire 3 nouvelles, compte dans les points les notes datées après la date donnée (sans doublon avec les points déjà attribués) et les remet en « pas encore vues ». Niveaux et paquets suivent.
@@ -71,5 +75,5 @@ Quand les barèmes changent, `docker compose exec app python -m app.reset_game <
 ### Compte administrateur (tests)
 
 - `docker compose exec app python -m app.admin create <identifiant>` (le mot de passe est demandé) crée un compte qui se comporte comme un élève, sans QR code ni synchro Pronote, avec des données de démonstration (moyennes, emploi du temps, notes).
-- Dans « Objectifs », une section « Outils de test » permet de s'octroyer 1, 3, 10 ou 25 points (niveaux et paquets suivent). Il peut aussi générer un code de liaison pour tester un compte parent.
+- Dans « Objectifs », une section « Outils de test » permet de s'octroyer 1, 3, 10 ou 25 points (niveaux et paquets suivent). Il peut aussi générer un code de liaison pour tester un compte parent. Le bouton « 🏆 Simuler une mission réussie » ajoute 5 points et déclenche la célébration d'une mission.
 - Ce rôle ne peut pas être demandé depuis la page d'inscription.

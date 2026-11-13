@@ -57,6 +57,10 @@ with db.conn() as c:
     c.execute("UPDATE averages SET student = 13.0 WHERE subject = 'MATHEMATIQUES'")
     before = game.total_points(c); game.evaluate(c); game.evaluate(c)
     assert c.execute("SELECT status FROM missions WHERE id = ?", (m["id"],)).fetchone()[0] == "done" and game.total_points(c) == before + 2
+    cel = game.summary(c)["celebrate"]                                              # mission réussie : à célébrer à la prochaine ouverture
+    assert [x["id"] for x in cel] == [m["id"]] and cel[0]["points"] == 2, cel
+    game.mark_celebrated(c, [m["id"]]); assert game.summary(c)["celebrate"] == []   # une seule fois
+    game.mark_celebrated(c, [m["id"]]); assert game.summary(c)["celebrate"] == []
 
     # « 3 notes ≥ 16 » : seules les notes postérieures au début de la mission comptent
     c.execute("DELETE FROM missions")
@@ -146,6 +150,13 @@ with db.conn() as c:
 # --- API ---
 with TestClient(app) as cl:
     g = cl.get("/api/game").json()
+    with db.conn() as x:
+        x.execute("INSERT INTO missions (kind, params, baseline, points, label, started_at, expires_at, status, done_at) VALUES ('good_grades','{}','{}',5,'fête',?,?,'done',?)", (iso(3), iso(-10), iso(0)))
+        mid = x.execute("SELECT id FROM missions WHERE label = 'fête'").fetchone()[0]
+    cel = [m["label"] for m in cl.get("/api/game").json()["celebrate"]]
+    assert "fête" in cel and "celebrate" in cl.get("/").text, cel
+    ids = [m["id"] for m in cl.get("/api/game").json()["celebrate"]]
+    assert cl.post("/api/missions/celebrated", json={"ids": ids}).json() == {"celebrate": []} and cl.get("/api/game").json()["celebrate"] == []
     assert g["level"] >= 3 and any(p["level"] == 3 and not p["opened_at"] for p in g["packs_list"]) and g["missions"] and g["history"]
     j = cl.post("/api/packs/3/open").json(); assert j["reward"] in game.BY_LABEL and j["rarity"] in game.RARITY_WEIGHTS and j["icon"]
     assert cl.post("/api/packs/3/open").status_code == 404

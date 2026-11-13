@@ -174,6 +174,18 @@ def api_game(request: Request):
         return game.overview(c)
 
 
+class CelebratedIn(BaseModel):
+    ids: list[int] = Field(max_length=20)
+
+
+@app.post("/api/missions/celebrated")
+def api_celebrated(body: CelebratedIn):
+    """L'élève a vu la célébration de ces missions réussies. Bloqué pour le parent (lecture seule)."""
+    with db.conn() as c:
+        game.mark_celebrated(c, body.ids)
+        return {"celebrate": game.summary(c)["celebrate"]}
+
+
 class PointsIn(BaseModel):
     points: int = Field(ge=1, le=100)
 
@@ -185,6 +197,20 @@ def admin_points(body: PointsIn, request: Request):
         raise HTTPException(403, "Réservé au compte administrateur.")
     with db.conn() as c:
         game.award(c, "admin", f"admin:{uuid.uuid4().hex}", body.points, "Points ajoutés (test)")
+        game.ensure_packs(c)
+        return game.summary(c)
+
+
+@app.post("/api/admin/mission-done")
+def admin_mission_done(request: Request):
+    """Outil de test : crée une mission déjà réussie (5 points) pour voir la célébration. Les points sont réellement attribués."""
+    if (request.state.user or {}).get("role") != "admin":
+        raise HTTPException(403, "Réservé au compte administrateur.")
+    today = date.today().isoformat()
+    with db.conn() as c:
+        cur = c.execute("INSERT INTO missions (kind, params, baseline, points, label, started_at, expires_at, status, done_at) "
+                        "VALUES ('good_grades','{}','{}',5,'Mission de test',?,?,'done',?)", (today, today, today))
+        game.award(c, "mission", f"mission:{cur.lastrowid}", 5, "Mission réussie : Mission de test")
         game.ensure_packs(c)
         return game.summary(c)
 

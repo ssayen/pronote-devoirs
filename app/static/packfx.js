@@ -45,6 +45,12 @@ const PackFX = (() => {
         const n = 18;
         for (let i = 0; i < n; i++) tone(380 + 1300 * (i / n), t + dur * (1 - Math.pow(1 - i / n, 1.8)), 0.06, { type: "triangle", gain: 0.12 + 0.12 * i / n });
       },
+      win(t) {                                       // mission accomplie : « ta-da » en arpège ascendant, accord final scintillant
+        [523.3, 659.3, 784, 1046.5].forEach((f, i) => bell(f, t + i * 0.11, 0.9, 0.2));
+        [523.3, 659.3, 784, 1046.5, 1318.5].forEach(f => bell(f, t + 0.5, 1.6, 0.15));
+        tone(130.8, t + 0.5, 0.8, { gain: 0.35, type: "triangle" }); hiss(t + 0.5, 0.25, { type: "highpass", f0: 5000, f1: 8000, gain: 0.12 });
+        for (let i = 0; i < 8; i++) bell(2400 + Math.random() * 2600, t + 0.6 + i * 0.1, 0.4, 0.04);
+      },
       slam(t) {                                      // impact de la bannière
         tone(70, t, 0.7, { f1: 32, gain: 0.8 }); hiss(t, 0.45, { type: "lowpass", f0: 3500, f1: 100, gain: 0.45 }); hiss(t, 0.1, { type: "highpass", f0: 2500, f1: 5000, gain: 0.3 });
       },
@@ -115,7 +121,7 @@ const PackFX = (() => {
       if (actx.state === "suspended") actx.resume();
     } catch (e) { actx = null; }
   }
-  const quiet = { drop() {}, charge() {}, stopCharge() {}, burst() {}, reveal() {} };
+  const quiet = { win() {}, drop() {}, charge() {}, stopCharge() {}, burst() {}, reveal() {} };
   function sounds(power, rarity) { unlock(); return actx ? makeSound(actx, master, power, rarity) : quiet; }
   const buzz = p => { try { if (soundOn() && navigator.vibrate) navigator.vibrate(p); } catch (e) {} };
   const SVGNS = "http://www.w3.org/2000/svg";
@@ -332,5 +338,72 @@ const PackFX = (() => {
     });
   }
 
-  return { open, svg, unlock, RARITY, _makeSound: makeSound };
+  // Célébration d'une mission réussie : trophée, confettis, points gagnés. Résout "packs" si l'élève veut aller ouvrir son paquet, sinon "ok".
+  function celebrate({ label, points, packs = 0 }) {
+    return new Promise(resolve => {
+      const calm = matchMedia("(prefers-reduced-motion: reduce)").matches;
+      const root = document.createElement("div");
+      root.className = "pfx pfx-mission"; root.setAttribute("role", "dialog"); root.setAttribute("aria-modal", "true"); root.setAttribute("aria-label", "Mission accomplie");
+      root.innerHTML = `<canvas class="pfx-canvas"></canvas><div class="pfx-vignette"></div><div class="pfx-rays"></div>
+        <div class="pfx-win">
+          <div class="pfx-trophy" aria-hidden="true">🏆</div>
+          <h2 class="pfx-wt">Mission accomplie !</h2>
+          <p class="pfx-wl"></p>
+          <div class="pfx-pts">+${points} point${points > 1 ? "s" : ""}</div>
+          ${packs ? `<p class="pfx-wp">🎁 Un paquet t'attend !</p>` : ""}
+          <div class="pfx-wb">${packs ? `<button type="button" class="btn primary pfx-pk">Ouvrir mon paquet</button>` : ""}<button type="button" class="btn${packs ? "" : " primary"} pfx-ok">${packs ? "Plus tard" : "Super !"}</button></div>
+        </div>
+        <button type="button" class="pfx-mute"></button>`;
+      root.querySelector(".pfx-wl").textContent = label;
+      root.style.setProperty("--rc", "#ffb800");
+      const prevFocus = document.activeElement, prevOverflow = document.body.style.overflow;
+      document.body.style.overflow = "hidden"; document.body.append(root);
+      let closed = false, raf = 0, played = false;
+      const mute = root.querySelector(".pfx-mute");
+      const paintMute = () => { const on = soundOn(); mute.textContent = on ? "🔊" : "🔇"; mute.setAttribute("aria-label", on ? "Couper le son" : "Activer le son"); };
+      mute.onclick = () => { unlock(); setSound(!soundOn()); paintMute(); }; paintMute();
+      const play = () => { if (played || closed || !actx || actx.state !== "running") return; played = true; makeSound(actx, master, 1, "rare").win(actx.currentTime + 0.05); };
+      unlock(); setTimeout(play, 80);
+      const first = () => { unlock(); setTimeout(play, 60); };      // le navigateur refuse de jouer un son sans geste : on le joue au premier contact
+      addEventListener("pointerdown", first, { once: true }); addEventListener("keydown", first, { once: true });
+      buzz([80, 40, 80, 40, 200]);
+      const finish = r => {
+        if (closed) return; closed = true; cancelAnimationFrame(raf);
+        removeEventListener("keydown", onKey, true); removeEventListener("pointerdown", first); removeEventListener("keydown", first); removeEventListener("resize", fit);
+        root.classList.add("out");
+        setTimeout(() => { root.remove(); document.body.style.overflow = prevOverflow; if (prevFocus && prevFocus.focus) prevFocus.focus(); resolve(r); }, calm ? 0 : 250);
+      };
+      const onKey = ev => { if (ev.key === "Escape" || ev.key === "Enter") { ev.preventDefault(); ev.stopPropagation(); finish("ok"); } else if (ev.key === "Tab") { ev.preventDefault(); root.querySelector(".pfx-ok").focus(); } };
+      addEventListener("keydown", onKey, true);
+      root.querySelector(".pfx-ok").onclick = () => finish("ok");
+      const pk = root.querySelector(".pfx-pk"); if (pk) pk.onclick = () => finish("packs");
+      (pk || root.querySelector(".pfx-ok")).focus();
+      if (calm) { root.classList.add("calm"); return; }
+      // confettis : deux salves depuis les coins du bas, puis une pluie légère
+      const cv = root.querySelector(".pfx-canvas"), g = cv.getContext("2d"), parts = [], COL = ["#ffd45a", "#ffb800", "#ff6bd6", "#6bd6ff", "#9dff6b", "#ffffff"];
+      let W = 0, H = 0, last = 0;
+      const fit = () => { const d = devicePixelRatio || 1; W = innerWidth; H = innerHeight; cv.width = W * d; cv.height = H * d; g.setTransform(d, 0, 0, d, 0, 0); };
+      fit(); addEventListener("resize", fit);
+      const r = (a, b) => a + Math.random() * (b - a);
+      const shoot = (x, dir) => { for (let i = 0; i < 70; i++) { const a = -Math.PI / 2 + dir * r(.1, .7), v = r(500, 1100); parts.push({ x, y: H + 10, vx: Math.cos(a) * v, vy: Math.sin(a) * v, w: r(6, 11), h: r(4, 8), rot: r(0, 6.3), vr: r(-9, 9), life: r(2.2, 3.4), col: COL[(Math.random() * COL.length) | 0] }); } };
+      shoot(0, 1); shoot(W, -1);
+      setTimeout(() => { if (!closed) { shoot(0, 1); shoot(W, -1); } }, 450);
+      const iv = setInterval(() => { if (closed) return clearInterval(iv); parts.push({ x: r(0, W), y: -10, vx: r(-30, 30), vy: r(60, 160), w: r(6, 10), h: r(4, 7), rot: r(0, 6.3), vr: r(-6, 6), life: r(3, 4.5), col: COL[(Math.random() * COL.length) | 0] }); }, 90);
+      const frame = now => {
+        if (closed) return;
+        raf = requestAnimationFrame(frame);
+        const dt = Math.min((now - (last || now)) / 1000, 0.05); last = now;
+        g.clearRect(0, 0, W, H);
+        for (let i = parts.length - 1; i >= 0; i--) {
+          const p = parts[i]; p.life -= dt;
+          if (p.life <= 0 || p.y > H + 30) { parts.splice(i, 1); continue; }
+          p.vy += 700 * dt; p.vx *= 0.992; p.vy *= 0.992; p.x += p.vx * dt; p.y += p.vy * dt; p.rot += p.vr * dt;
+          g.save(); g.translate(p.x, p.y); g.rotate(p.rot); g.globalAlpha = Math.min(1, p.life); g.fillStyle = p.col; g.fillRect(-p.w / 2, -p.h / 2, p.w, p.h); g.restore();
+        }
+      };
+      raf = requestAnimationFrame(frame);
+    });
+  }
+
+  return { open, celebrate, svg, unlock, RARITY, _makeSound: makeSound };
 })();

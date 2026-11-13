@@ -116,7 +116,7 @@ with TestClient(app) as a, TestClient(app) as b:
         assert "data-child=" in page
         for method, url, kw in [("post", "/api/cards", {"json": {"subject": "x", "description": "y", "due_date": "2030-01-01"}}),
                                 ("put", "/api/settings", {"json": {"theme": "dark"}}), ("post", "/sync", {}), ("post", "/api/reconnect", {"json": {}}),
-                                ("post", "/api/parent-invite", {}), ("post", "/move/old", {}), ("post", "/api/packs/2/open", {}), ("post", "/api/grades/seen", {"json": {}})]:
+                                ("post", "/api/parent-invite", {}), ("post", "/move/old", {}), ("post", "/api/packs/2/open", {}), ("post", "/api/grades/seen", {"json": {}}), ("post", "/api/missions/celebrated", {"json": {"ids": [1]}})]:
             assert getattr(p, method)(url, **kw).status_code == 403, url
         assert b.get("/api/settings").json()["theme"] == "dark" and len(b.get("/api/homework").json()) == 1
         assert reg(p, "papa", role="parent", link=code, image=B64P, pin="1234").status_code == 403, "code à usage unique"
@@ -158,11 +158,14 @@ with TestClient(app) as t:
     g2 = t.get("/api/game").json(); assert g2["level"] > g["level"] and g2["packs"] >= 2
     assert t.post("/api/packs/%d/open" % g2["packs_list"][0]["level"]).status_code == 200
     assert t.post("/api/admin/points", json={"points": 0}).status_code == 422
+    r = t.post("/api/admin/mission-done"); assert r.status_code == 200 and [m["label"] for m in r.json()["celebrate"]] == ["Mission de test"]
+    assert t.post("/api/missions/celebrated", json={"ids": [m["id"] for m in r.json()["celebrate"]]}).json() == {"celebrate": []}
     assert t.post("/api/reconnect", json={"image": "x", "pin": "1234"}).status_code == 403
     assert t.post("/sync", follow_redirects=False).status_code == 303
     with db.as_user(aid), db.conn() as c: assert c.execute("SELECT COUNT(*) FROM sync_log").fetchone()[0] == 0
     code = t.post("/api/parent-invite").json()["code"]; assert len(code) == 9, "l'admin peut tester la liaison parent"
 assert b.post("/api/admin/points", json={"points": 5}).status_code == 403, "réservé à l'admin"
+assert b.post("/api/admin/mission-done").status_code == 403, "réservé à l'admin"
 # passage d'un jeton parent à un jeton élève : un client élève n'a pas set_child
 class StudentClient:
     logged_in = True
