@@ -75,10 +75,38 @@ with db.conn() as c:
     c.execute("UPDATE averages SET student = 12.0 WHERE subject = 'MATHEMATIQUES'")   # remet l'état de départ
     cands = game._candidates(c)
     pts = lambda kind, pred=lambda m: True: sorted(m["points"] for m in cands if m["kind"] == kind and pred(m))
-    assert sorted({m["points"] for m in cands if m["kind"] == "avg_up"}) == [1, 2, 4]
+    maths = lambda: sorted((m["params"]["target"], m["points"]) for m in game._candidates(c) if m["kind"] == "avg_up" and m["subject"] == "MATHEMATIQUES")
+    assert maths() == [(13, 2), (14, 4), (15, 6)], maths()                       # 12,0 : cibles rondes, points selon l'écart
+    c.execute("UPDATE averages SET student = 13.4 WHERE subject = 'MATHEMATIQUES'")
+    assert maths() == [(14, 2), (15, 4), (16, 6)], maths()                       # 13,4 : 14, 15, 16
+    c.execute("UPDATE averages SET student = 13.9 WHERE subject = 'MATHEMATIQUES'")
+    assert maths()[0][0] == 15, "écart de 0,1 : on ne propose pas 14"
+    # priorité aux moyennes basses : 13,6 -> 15 doit sortir bien plus souvent que 18 -> 19
+    c.execute("UPDATE averages SET student = 13.6 WHERE subject = 'MATHEMATIQUES'"); c.execute("UPDATE averages SET student = 18 WHERE subject = 'SVT'")
+    import random as _rd
+    wl = {(m["subject"], m["params"]["target"]): m["weight"] for m in game._candidates(c) if m["kind"] == "avg_up"}
+    assert wl[("MATHEMATIQUES", 15)] > 4 * wl[("SVT", 19)], wl
+    cnt = {"MATHEMATIQUES": 0, "SVT": 0}; r0 = _rd.Random(1)
+    pool = [m for m in game._candidates(c) if m["kind"] == "avg_up" and m["subject"] in cnt]
+    for _ in range(600): cnt[r0.choices(pool, weights=[m["weight"] for m in pool])[0]["subject"]] += 1
+    assert cnt["MATHEMATIQUES"] > 4 * cnt["SVT"], cnt
+    c.execute("UPDATE averages SET student = 15.0 WHERE subject = 'SVT'")
+    c.execute("UPDATE averages SET student = 12.0 WHERE subject = 'MATHEMATIQUES'")
+    mm = {"params": json.dumps({"target": 14}), "baseline": json.dumps({"avg": 13.4, "period": "Trimestre 1"}), "kind": "avg_up", "subject": "MATHEMATIQUES"}
+    assert game.progress(c, mm)["done"] is False                                  # moyenne actuelle 12,0 < 14
+    c.execute("UPDATE averages SET student = 14.0 WHERE subject = 'MATHEMATIQUES'")
+    assert game.progress(c, mm)["done"] is True and "objectif 14" in game.progress(c, mm)["text"]
+    c.execute("UPDATE averages SET student = 12.0 WHERE subject = 'MATHEMATIQUES'")
+    assert "Atteindre 14 de moyenne en Mathematiques" in [m["label"] for m in game._candidates(c)]
     assert pts("beat_class", lambda m: m["subject"] == "ARTS") == [2], "écart 0,5 : 2 pts"
     assert pts("beat_class", lambda m: m["subject"] == "ANGLAIS") == [5], "écart 2,5 : 5 pts"
-    assert pts("overall_up") == [2, 5] and pts("above_class") == [1, 3] and pts("good_grades") == [2, 5, 10]
+    assert pts("overall_up") == [5, 10], pts("overall_up")           # 13,0 : 13,5 puis 14
+    ov = lambda: sorted((m["params"]["target"], m["points"]) for m in game._candidates(c) if m["kind"] == "overall_up")
+    c.execute("UPDATE periods SET overall = 14.3 WHERE name = 'Trimestre 1'")
+    assert ov() == [(14.5, 2), (15, 7)], ov()
+    assert "Atteindre 14,5 de moyenne générale" in [m["label"] for m in game._candidates(c)]
+    c.execute("UPDATE periods SET overall = 13.0 WHERE name = 'Trimestre 1'")
+    assert pts("above_class") == [1, 3] and pts("above_class") == [1, 3] and pts("good_grades") == [2, 5, 10]
     assert {m["points"] for m in cands if m["kind"] == "beat_class"} <= {2, 4, 5}
     c.execute("UPDATE averages SET student = 11.0, class_avg = 12.5 WHERE subject = 'ARTS'")   # écart 1,5 : 4 pts
     assert [m["points"] for m in game._candidates(c) if m["kind"] == "beat_class" and m["subject"] == "ARTS"] == [4]

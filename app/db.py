@@ -111,7 +111,7 @@ CREATE TABLE IF NOT EXISTS missions (
     id         INTEGER PRIMARY KEY AUTOINCREMENT,
     kind       TEXT NOT NULL,             -- avg_up | beat_class | good_grades
     subject    TEXT,
-    params     TEXT NOT NULL DEFAULT '{}',   -- objectif (ex. {"delta": 1})
+    params     TEXT NOT NULL DEFAULT '{}',   -- objectif (ex. {"target": 14} ; anciennes missions : {"delta": 1})
     baseline   TEXT NOT NULL DEFAULT '{}',   -- état au démarrage (ex. {"avg": 12.4, "period": "Trimestre 1"})
     points     INTEGER NOT NULL,
     label      TEXT NOT NULL,

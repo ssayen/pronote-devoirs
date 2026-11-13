@@ -12,9 +12,12 @@ POINTS_PER_LEVEL = 10
 MISSION_COUNT = 3          # missions actives en même temps
 MISSION_DAYS = 21
 # Barèmes des missions (à ajuster ici)
-AVG_UP = [(0.5, 1), (1, 2), (2, 4)]              # (gain de moyenne dans la matière, points)
+AVG_UP = [(0.5, 1), (1, 2), (2, 4), (3, 6)]       # (écart maximal entre la moyenne actuelle et la cible, points) ; au-delà : pas proposé
+AVG_UP_WEIGHT = 2                                 # poids d'une cible = (20 − moyenne)^AVG_UP_WEIGHT / rang de la cible : les moyennes basses et les cibles proches sortent bien plus souvent
+AVG_UP_MIN_GAP = 0.3                              # écart minimal : on ne propose pas « 14 » à qui a déjà 13,9
 BEAT_CLASS = [(1, 2), (2, 4), (None, 5)]          # (écart maximal avec la moyenne de la classe, points) ; None = au-delà
-OVERALL_UP = [(0.2, 2), (0.5, 5)]                 # (gain de moyenne générale, points)
+OVERALL_UP = [(0.3, 2), (0.5, 5), (0.75, 7), (1, 10)]        # (écart maximal entre la moyenne générale et la cible, points) ; cibles par demi-point (plus dur à faire bouger)
+OVERALL_UP_MIN_GAP = 0.2
 GRADES_ABOVE_CLASS = [(2, 1), (5, 3)]             # (nombre de notes au-dessus de la moyenne de la classe, points)
 GOOD_GRADES = [(3, 16, 2), (3, 18, 5), (3, 20, 10)]   # (nombre de notes, note minimale sur 20, points)
 # Liste provisoire : les vraies récompenses seront choisies par le parent. La rareté pilote l'animation d'ouverture.
@@ -103,11 +106,17 @@ def _candidates(c) -> list[dict]:
     out = []
     for a in _current_averages(c):
         subj = _pretty(a["subject"])
-        if a["student"] < 19:
-            for delta, pts in AVG_UP:
-                out.append({"kind": "avg_up", "subject": a["subject"], "points": pts, "params": {"delta": delta},
-                            "baseline": {"avg": a["student"], "period": a["period"]},
-                            "label": f"Améliorer la moyenne de {subj} de {_fmt(delta)} point{'s' if delta > 1 else ''}"})
+        for target in range(int(a["student"]) + 1, 21):       # cibles rondes : 13,4 -> 14, 15, 16…
+            gap = target - a["student"]
+            if gap < AVG_UP_MIN_GAP - 1e-9:
+                continue
+            pts = next((p for limit, p in AVG_UP if gap <= limit), None)
+            if pts is None:
+                break
+            weight = (20 - a["student"]) ** AVG_UP_WEIGHT / (target - int(a["student"]))   # 13,6 -> 15 : ~21 ; 18 -> 19 : 4
+            out.append({"kind": "avg_up", "subject": a["subject"], "points": pts, "params": {"target": target}, "weight": weight,
+                        "baseline": {"avg": a["student"], "period": a["period"]},
+                        "label": f"Atteindre {target} de moyenne en {subj}"})
         if a["class_avg"] is not None and a["student"] < a["class_avg"]:
             gap = a["class_avg"] - a["student"]
             pts = next(p for limit, p in BEAT_CLASS if limit is None or gap <= limit)
@@ -115,11 +124,18 @@ def _candidates(c) -> list[dict]:
                         "baseline": {"avg": a["student"], "class_avg": a["class_avg"], "period": a["period"]},
                         "label": f"Dépasser la moyenne de la classe en {subj}"})
     per = _current_period(c)
-    if per and per["overall"] is not None and per["overall"] < 19.5:
-        for delta, pts in OVERALL_UP:
-            out.append({"kind": "overall_up", "subject": None, "points": pts, "params": {"delta": delta},
-                        "baseline": {"avg": per["overall"], "period": per["name"]},
-                        "label": f"Améliorer ta moyenne générale de {_fmt(delta)} point{'s' if delta > 1 else ''}"})
+    if per and per["overall"] is not None:
+        ov, k = per["overall"], int(per["overall"] * 2) + 1
+        while k <= 40:                                         # cibles rondes ou à .5 : 14,3 -> 14,5 ; 15 ; 15,5
+            target = k / 2; k += 1
+            gap = target - ov
+            if gap < OVERALL_UP_MIN_GAP - 1e-9:
+                continue
+            pts = next((p for limit, p in OVERALL_UP if gap <= limit), None)
+            if pts is None:
+                break
+            out.append({"kind": "overall_up", "subject": None, "points": pts, "params": {"target": target},
+                        "baseline": {"avg": ov, "period": per["name"]}, "label": f"Atteindre {_fmt(target)} de moyenne générale"})
     for n, pts in GRADES_ABOVE_CLASS:
         out.append({"kind": "above_class", "subject": None, "points": pts, "params": {"n": n}, "baseline": {},
                     "label": f"Obtenir {n} notes au-dessus de la moyenne de la classe (n'importe quelle matière)"})
@@ -145,7 +161,8 @@ def generate(c, rng=random) -> int:
             break
         available = sorted({m["kind"] for m in pool})
         kind = rng.choice([k for k in available if k not in kinds] or available)
-        m = rng.choice([x for x in pool if x["kind"] == kind])
+        same = [x for x in pool if x["kind"] == kind]
+        m = rng.choices(same, weights=[x.get("weight", 1) for x in same])[0]
         today = date.today()
         c.execute("INSERT INTO missions (kind, subject, params, baseline, points, label, started_at, expires_at) VALUES (?,?,?,?,?,?,?,?)",
                   (m["kind"], m["subject"], json.dumps(m["params"]), json.dumps(m["baseline"]), m["points"], m["label"],
@@ -164,17 +181,17 @@ def progress(c, m) -> dict:
         r = c.execute("SELECT student, class_avg FROM averages WHERE period = ? AND subject = ?", (base["period"], m["subject"])).fetchone()
         cur = r["student"] if r and r["student"] is not None else base["avg"]
         if m["kind"] == "avg_up":
-            gain = round(cur - base["avg"], 2)
-            return {"done": gain >= params["delta"] - 1e-9, "current": max(gain, 0), "target": params["delta"],
-                    "text": f"{_fmt(base['avg'])} → {_fmt(cur)} (objectif {_fmt(base['avg'] + params['delta'])})"}
+            goal = params["target"] if "target" in params else base["avg"] + params["delta"]   # « delta » : missions créées avant les cibles rondes
+            return {"done": cur >= goal - 1e-9, "current": max(round(cur - base["avg"], 2), 0), "target": round(goal - base["avg"], 2),
+                    "text": f"{_fmt(base['avg'])} → {_fmt(cur)} (objectif {_fmt(goal)})"}
         cl = r["class_avg"] if r and r["class_avg"] is not None else base["class_avg"]
         return {"done": cur > cl, "current": cur, "target": cl, "text": f"Toi {_fmt(cur)} · classe {_fmt(cl)}"}
     if m["kind"] == "overall_up":
         r = c.execute("SELECT overall FROM periods WHERE name = ?", (base["period"],)).fetchone()
         cur = r["overall"] if r and r["overall"] is not None else base["avg"]
-        gain = round(cur - base["avg"], 2)
-        return {"done": gain >= params["delta"] - 1e-9, "current": max(gain, 0), "target": params["delta"],
-                "text": f"{_fmt(base['avg'])} → {_fmt(cur)} (objectif {_fmt(base['avg'] + params['delta'])})"}
+        goal = params["target"] if "target" in params else base["avg"] + params["delta"]
+        return {"done": cur >= goal - 1e-9, "current": max(round(cur - base["avg"], 2), 0), "target": round(goal - base["avg"], 2),
+                "text": f"{_fmt(base['avg'])} → {_fmt(cur)} (objectif {_fmt(goal)})"}
     if m["kind"] == "above_class":
         n = c.execute("SELECT COUNT(*) FROM grades WHERE date >= ? AND class_avg IS NOT NULL AND grade > class_avg", (m["started_at"],)).fetchone()[0]
     else:   # good_grades
