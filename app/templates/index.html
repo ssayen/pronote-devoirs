@@ -41,6 +41,7 @@
   @media (max-width: 600px) { header { grid-template-columns:minmax(0,1fr); } header h1 { grid-row:1; } header .views { grid-row:2; } header .tools { grid-row:3; justify-self:stretch; } }
   h1 { font-size:1.5rem; margin:0; }
   h1 small { font-weight:400; opacity:.6; }
+  h1 { display:flex; align-items:center; gap:.6rem; } h1 .logo { width:2.25rem; height:2.25rem; flex:none; border-radius:22%; box-shadow:0 1px 4px var(--shadow); }
   .alert { color: var(--late); font-size:.9rem; }
   .board { display:grid; grid-template-columns: repeat(3, minmax(0,1fr)); gap:1rem; align-items:stretch; min-height:calc(100vh - 9rem); }
   .col { display:flex; flex-direction:column; }
@@ -156,6 +157,8 @@
   .views { display:inline-flex; gap:.2rem; padding:.2rem; border:1px solid var(--line); border-radius:999px; background:var(--panel); }
   .views button { border:none; background:none; color:var(--fg); font:inherit; font-size:.9rem; font-weight:600; padding:.35rem .9rem; border-radius:999px; cursor:pointer; opacity:.7; }
   .views button[aria-selected="true"] { background:var(--todo); color:#fff; opacity:1; box-shadow:0 1px 4px var(--shadow); }
+  .views button { white-space:nowrap; }
+  @media (max-width: 600px) { .views { max-width:100%; box-sizing:border-box; overflow-x:auto; scrollbar-width:none; } .views button { padding:.35rem .6rem; font-size:.82rem; } }
   .views button:focus-visible { outline:2px solid var(--todo); outline-offset:2px; }
   /* résultats : couleurs de série validées (daltonisme, contraste) clair / sombre */
   #results { --s-me:#2a78d6; --s-class:#eb6834; --grid:#0000001f; --good:#1a7f4b; --bad:#b3261e; max-width:72rem; margin:0 auto; }
@@ -356,7 +359,7 @@
 </head>
 <body>
 <header>
-  <h1>StudyFun{% if child %} <small>— {{ child }}</small>{% endif %}</h1>
+  <h1><img class="logo" src="/static/icons/icon-192.png" alt="" width="36" height="36">StudyFun{% if child %} <small>— {{ child }}</small>{% endif %}</h1>
   <div class="views" role="tablist" aria-label="Section">
     <button role="tab" id="tab-devoirs" aria-selected="true" aria-controls="v-devoirs" data-view="devoirs">Devoirs</button>
     <button role="tab" id="tab-resultats" aria-selected="false" aria-controls="results" data-view="resultats">Résultats</button>
