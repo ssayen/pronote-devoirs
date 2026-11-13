@@ -7,3 +7,5 @@ data-dev/
 !app/static/avatars/avatars.json
 # images sources des avatars (47 Mo) : seules les versions web de app/static/avatars/ sont versionnées
 /avatars/
+# fonds saisonniers sources (~9 Mo) : seules les versions web de app/static/saisons/ sont versionnées
+/fond-*.png

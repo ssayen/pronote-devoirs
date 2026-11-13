@@ -43,6 +43,10 @@ les garde en local et renvoie le statut « terminé » vers Pronote.
 - Liaison : à l'inscription, le parent est rattaché automatiquement à l'élève dont l'identifiant Pronote figure parmi ses enfants (à défaut : même nom, classe et établissement). Secours : l'élève génère un code (menu de l'avatar → « Inviter un parent », valable 7 jours, usage unique) que le parent saisit en plus de son QR code. L'élève doit s'être connecté avec son QR code avant.
 - Pour passer un compte existant d'un jeton parent à un jeton élève sans perdre l'historique : « Reconnecter Pronote » avec le QR code de l'élève (les cartes, l'avatar et les réglages sont conservés).
 
+## Fond d'écran saisonnier
+
+Le fond de l'app change avec la période de l'année : Noël (1er déc. → 6 janv.), hiver (7 janv. → 19 mars), printemps (20 mars → 20 juin), été (21 juin → 22 sept.), automne (23 sept. → 30 nov.). Le calendrier est dans le `<head>` de `app/templates/index.html` (tableau `DEBUT`, calculé dans le navigateur) ; `?saison=noel` dans l'adresse prévisualise une saison. L'image est voilée pour rester lisible (plus fortement en thème sombre, variable `--saison-veil`). Les images sources `fond-<saison>.png` se déposent à la racine (non versionnées) ; `.venv/bin/python scripts/build_saisons.py` écrit les versions web `app/static/saisons/<saison>.jpg` (1600 px, ~100 Ko).
+
 ## Notes (flux et « pas encore vues »)
 
 Onglet « Notes » : toutes les notes (sur 20) avec date, coefficient, moyenne et max de la classe, commentaire. Une note qui arrive à la synchronisation est « non vue » **même si sa date est ancienne** (un enseignant peut saisir une note datée d'il y a un mois) : l'état est stocké côté serveur, dans la base de l'élève (colonnes `first_seen` et `seen_at` de `grades`, quelques octets par note, rien à synchroniser entre appareils). Les notes déjà connues au déploiement, ou lues à la toute première synchronisation, sont considérées comme vues. Elles sont mises en avant (section « Nouvelles notes », pastille rouge sur l'onglet) et marquées vues quand l'élève quitte l'onglet ou clique sur « Tout marquer comme vu ». Le parent voit ce qui n'a pas encore été vu, sans rien modifier.

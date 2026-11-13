@@ -19,4 +19,8 @@ with TestClient(app) as c:
     assert sw.status_code == 200 and "javascript" in sw.headers["content-type"] and "fetch" in sw.text
     h = c.get("/").text
     assert 'rel="manifest"' in h and "serviceWorker.register" in h and "apple-touch-icon" in h
+    # fonds saisonniers : une image par saison, et le calendrier dans la page
+    for n in ("noel", "hiver", "printemps", "ete", "automne"):
+        r = c.get(f"/static/saisons/{n}.jpg"); assert r.status_code == 200 and r.headers["content-type"] == "image/jpeg" and len(r.content) < 400_000, n
+        assert f'"{n}"' in h and f"/static/saisons/{n}.jpg" in h, n
 print("ok PWA")

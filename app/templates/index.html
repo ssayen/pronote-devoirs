@@ -12,6 +12,17 @@
 <link rel="icon" href="/favicon.ico" sizes="48x48">
 <link rel="icon" type="image/png" sizes="32x32" href="/static/icons/favicon-32.png">
 <link rel="stylesheet" href="/static/packfx.css">
+<script>
+// Fond d'écran selon la période de l'année (images app/static/saisons/<saison>.jpg). ?saison=noel pour prévisualiser.
+(() => {
+  const DEBUT = [[1201, "noel"], [923, "automne"], [621, "ete"], [320, "printemps"], [107, "hiver"]];   // début de chaque période (mois*100 + jour), de la plus tardive à la plus précoce
+  const d = new Date(), md = (d.getMonth() + 1) * 100 + d.getDate();
+  let s = (DEBUT.find(([deb]) => md >= deb) || [0, "noel"])[1];   // avant le 7 janvier : encore Noël
+  const force = new URLSearchParams(location.search).get("saison");
+  if (/^(noel|hiver|printemps|ete|automne)$/.test(force || "")) s = force;
+  document.documentElement.dataset.saison = s;
+})();
+</script>
 <link rel="apple-touch-icon" href="/static/icons/apple-touch-icon.png">
 <style>
   :root { color-scheme: light; --bg:#f4f6fb; --fg:#1f2430; --panel:#ffffff; --col:#e9edf6; --line:#d5dbe8; --late:#c0392b;
@@ -26,6 +37,14 @@
   html[data-readonly] .sync form, html[data-readonly] [data-reconnect],
   html[data-role="admin"] .sync form, html[data-role="admin"] [data-reconnect] { display:none !important; }
   body { font-family: system-ui, sans-serif; margin: 0; padding: 1rem; overflow-wrap:anywhere; background:var(--bg); color:var(--fg); }
+  /* fond saisonnier : image fixe derrière tout, voilée pour garder la lisibilité (plus sombre en thème sombre) */
+  html[data-saison="noel"] { --saison:url(/static/saisons/noel.jpg); } html[data-saison="hiver"] { --saison:url(/static/saisons/hiver.jpg); }
+  html[data-saison="printemps"] { --saison:url(/static/saisons/printemps.jpg); } html[data-saison="ete"] { --saison:url(/static/saisons/ete.jpg); }
+  html[data-saison="automne"] { --saison:url(/static/saisons/automne.jpg); }
+  :root { --saison-veil:rgba(244,246,251,.35); }
+  @media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) { --saison-veil:rgba(18,21,28,.72); } }
+  :root[data-theme="dark"] { --saison-veil:rgba(18,21,28,.72); }
+  body::before { content:""; position:fixed; inset:0; z-index:-1; pointer-events:none; background:linear-gradient(var(--saison-veil), var(--saison-veil)), var(--saison, none) center / cover no-repeat; }
   .tools { display:flex; align-items:center; gap:.8rem; }
   /* trois zones : titre | onglets | outils. Les onglets restent centrés quel que soit le contenu des outils (pas de décalage au changement d'onglet) */
   header { display:grid; grid-template-columns:1fr auto 1fr; align-items:center; gap:.5rem 1rem; margin-bottom:1rem; }
