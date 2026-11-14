@@ -157,13 +157,17 @@
   const RW = { bonus: { unit: "", rules: {} }, list: null, weights: { common: 50, rare: 30, epic: 15, legendary: 5 }, editing: null };
   async function rwApi(method, url, body) {
     const r = await fetch(url, { method, headers: JSON_HDR, body: body ? JSON.stringify(body) : undefined });
-    if (!r.ok) throw new Error(r.status);
+    if (!r.ok) {   // on remonte le message du serveur (texte en français) pour que le formulaire explique l'erreur
+      let msg = String(r.status);
+      try { const d = (await r.json()).detail; msg = typeof d === "string" ? d : "Valeurs invalides : vérifie les champs (nombres de 0 à 100, textes pas trop longs)."; } catch (e) {}
+      throw new Error(msg);
+    }
     const j = await r.json(); if (j.rewards) RW.list = j.rewards; if (j.bonus) RW.bonus = j.bonus; return j;
   }
   function rewardsEditor() {
     const sec = el("section", "g-sec g-rwedit"); sec.id = "g-rwedit";
     const rarLabel = r => (PackFX.RARITY[r] || {}).label || r;
-    const fail = () => toast("Enregistrement impossible, réessayer");
+    const fail = e => toast(e && e.message && isNaN(e.message) ? e.message : "Enregistrement impossible, réessayer");
     function paint() {
       sec.replaceChildren(el("h2", null, "Récompenses de l'élève"));
       if (!RW.list) { sec.append(el("p", "g-empty", "Chargement…")); return; }
@@ -172,7 +176,7 @@
         const box = el("div", "g-rwnone");
         box.append(el("b", null, "Aucune récompense définie."), " L'élève ne reçoit pas de paquet : à chaque niveau gagné, il a seulement droit à une animation.");
         const b = el("button", "btn", "Charger la liste d'exemples"); b.type = "button";
-        b.onclick = async () => { try { await rwApi("POST", "/api/rewards/examples"); paint(); } catch (e) { fail(); } };
+        b.onclick = async () => { try { await rwApi("POST", "/api/rewards/examples"); paint(); } catch (e) { fail(e); } };
         box.append(el("div"), b); sec.append(box);
       }
       const present = RARS.filter(r => RW.list.some(x => x.rarity === r)), total = present.reduce((s, r) => s + RW.weights[r], 0);
@@ -194,7 +198,7 @@
       card.firstChild.append(el("b", null, "Bonus systématique"), el("span", "g-rwodds", "en plus de la récompense tirée, à chaque paquet"));
       card.append(el("p", "g-sub", "Ex. une monnaie locale (des crédits) : le nombre est tiré au hasard entre le minimum et le maximum de la rareté obtenue. Laisse « max » vide ou à 0 pour une rareté sans bonus. Tu le coches « Remis » dans la liste des récompenses obtenues, comme la récompense."));
       const f = el("form", "g-bonusform"), unit = el("input", "g-rwt"), rows = {};
-      unit.value = RW.bonus.unit || ""; unit.maxLength = 20; unit.placeholder = "crédits"; unit.setAttribute("aria-label", "Nom de la monnaie ou du bonus");
+      unit.value = RW.bonus.unit || ""; unit.maxLength = 20; unit.placeholder = "ex. : crédits"; unit.setAttribute("aria-label", "Nom de la monnaie ou du bonus");
       const u = el("label", "g-bonusunit"); u.append("Nom (au pluriel) : ", unit); f.append(u);
       for (const r of RARS) {
         const rule = RW.bonus.rules[r] || {}, lo = el("input", "g-num"), hi = el("input", "g-num");
@@ -202,12 +206,15 @@
         const line = el("div", "g-bonusrow"); line.style.setProperty("--rc", (PackFX.RARITY[r] || {}).color || "#999");
         line.append(el("b", null, rarLabel(r)), " de ", lo, " à ", hi); f.append(line); rows[r] = [lo, hi];
       }
-      const b = el("button", "btn primary", "Enregistrer le bonus"); b.type = "submit"; f.append(b);
+      const b = el("button", "btn primary", "Enregistrer le bonus"); b.type = "submit";
+      const err = el("p", "g-rwerr"); err.setAttribute("role", "alert"); f.append(b, err);
+      const show = m => { err.textContent = m; if (m) toast(m); };
       f.onsubmit = async ev => {
-        ev.preventDefault();
+        ev.preventDefault(); show("");
         const rules = {};
         for (const r of RARS) { const lo = rows[r][0].value, hi = rows[r][1].value; rules[r] = hi === "" || +hi < 1 ? null : { min: lo === "" ? +hi : +lo, max: +hi }; }
-        try { await rwApi("PUT", "/api/rewards/bonus", { unit: unit.value, rules }); toast("Bonus enregistré"); paint(); } catch (er) { fail(); }
+        if (Object.values(rules).some(Boolean) && !unit.value.trim()) { show("Indique le nom de la monnaie (par exemple « crédits ») pour activer un bonus."); unit.focus(); return; }
+        try { await rwApi("PUT", "/api/rewards/bonus", { unit: unit.value, rules }); toast("Bonus enregistré"); paint(); } catch (er) { show(er && er.message && isNaN(er.message) ? er.message : "Enregistrement impossible, réessayer"); }
       };
       card.append(f); return card;
     }
@@ -215,7 +222,7 @@
       const li = el("li"); li.append(el("span", "g-rwico", x.icon || "🎁"), el("span", "g-rwlab", x.label));
       const e = el("button", "g-rwb", "✏️"); e.type = "button"; e.title = "Modifier"; e.setAttribute("aria-label", "Modifier " + x.label); e.onclick = () => { RW.editing = x.id; paint(); };
       const d = el("button", "g-rwb", "🗑️"); d.type = "button"; d.title = "Supprimer"; d.setAttribute("aria-label", "Supprimer " + x.label);
-      d.onclick = async () => { if (!confirm(`Supprimer « ${x.label} » ?`)) return; try { await rwApi("DELETE", "/api/rewards/" + x.id); paint(); } catch (er) { fail(); } };
+      d.onclick = async () => { if (!confirm(`Supprimer « ${x.label} » ?`)) return; try { await rwApi("DELETE", "/api/rewards/" + x.id); paint(); } catch (er) { fail(er); } };
       li.append(e, d); return li;
     }
     function editRow(x) {
@@ -226,7 +233,7 @@
       sel.setAttribute("aria-label", "Rareté");
       const ok = el("button", "btn primary", "Enregistrer"), no = el("button", "btn", "Annuler"); ok.type = "submit"; no.type = "button";
       no.onclick = () => { RW.editing = null; paint(); };
-      f.onsubmit = async ev => { ev.preventDefault(); try { await rwApi("PUT", "/api/rewards/" + x.id, { label: lab.value, rarity: sel.value, icon: ico.value }); RW.editing = null; paint(); } catch (er) { fail(); } };
+      f.onsubmit = async ev => { ev.preventDefault(); try { await rwApi("PUT", "/api/rewards/" + x.id, { label: lab.value, rarity: sel.value, icon: ico.value }); RW.editing = null; paint(); } catch (er) { fail(er); } };
       f.append(ico, lab, sel, ok, no); const li = el("li", "editing"); li.append(f); setTimeout(() => lab.focus(), 0); return li;
     }
     function addForm(r) {
@@ -234,7 +241,7 @@
       ico.maxLength = 8; ico.placeholder = "🎁"; ico.setAttribute("aria-label", "Icône (emoji)");
       lab.maxLength = 80; lab.required = true; lab.placeholder = `Ajouter une récompense ${rarLabel(r).toLowerCase()}…`; lab.setAttribute("aria-label", "Nouvelle récompense " + rarLabel(r));
       const b = el("button", "btn", "Ajouter"); b.type = "submit";
-      f.onsubmit = async ev => { ev.preventDefault(); try { await rwApi("POST", "/api/rewards", { label: lab.value, rarity: r, icon: ico.value }); paint(); } catch (er) { fail(); } };
+      f.onsubmit = async ev => { ev.preventDefault(); try { await rwApi("POST", "/api/rewards", { label: lab.value, rarity: r, icon: ico.value }); paint(); } catch (er) { fail(er); } };
       f.append(ico, lab, b); return f;
     }
     paint();

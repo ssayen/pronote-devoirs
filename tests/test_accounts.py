@@ -141,7 +141,8 @@ with TestClient(app) as a, TestClient(app) as b:
         # bonus systématique (crédits) : défini par le parent, tiré à l'ouverture, remis séparément
         assert b.put("/api/rewards/bonus", json={"unit": "crédits", "rules": {}}).status_code == 403
         assert p.put("/api/rewards/bonus", json={"unit": "crédits", "rules": {"common": {"min": 2, "max": 2}, "rare": {"min": 1, "max": 1}, "epic": {"min": 3, "max": 3}, "legendary": {"min": 5, "max": 5}}}).status_code == 200
-        assert p.put("/api/rewards/bonus", json={"unit": "", "rules": {"rare": {"min": 1, "max": 2}}}).status_code == 422 and p.put("/api/rewards/bonus", json={"unit": "c", "rules": {"rare": {"min": 3, "max": 1}}}).status_code == 422
+        r = p.put("/api/rewards/bonus", json={"unit": "", "rules": {"rare": {"min": 1, "max": 2}}}); assert r.status_code == 422 and "nom de la monnaie" in r.json()["detail"], r.text
+        assert p.put("/api/rewards/bonus", json={"unit": "c", "rules": {"rare": {"min": 3, "max": 1}}}).status_code == 422
         assert p.get("/api/rewards").json()["bonus"]["unit"] == "crédits"
         with db.as_user(uid_of("bob")), db.conn() as c:
             c.execute("INSERT OR IGNORE INTO packs (level) VALUES (4)")

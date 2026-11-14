@@ -226,14 +226,14 @@ def has_rewards(c) -> bool:
 def _clean(label: str, rarity: str, icon: str) -> tuple[str, str, str]:
     label, icon = (label or "").strip(), (icon or "").strip()
     if not label or len(label) > 80 or rarity not in RARITY_WEIGHTS or len(icon) > 8:
-        raise ValueError("récompense invalide")
+        raise ValueError("Libellé obligatoire (80 caractères maximum) et icône de 8 caractères maximum.")
     return label, rarity, icon
 
 
 def add_reward(c, label: str, rarity: str, icon: str = "") -> int:
     label, rarity, icon = _clean(label, rarity, icon)
     if c.execute("SELECT COUNT(*) FROM rewards").fetchone()[0] >= MAX_REWARDS:
-        raise ValueError("trop de récompenses")
+        raise ValueError(f"Limite de {MAX_REWARDS} récompenses atteinte.")
     return c.execute("INSERT INTO rewards (rarity, label, icon) VALUES (?,?,?)", (rarity, label, icon)).lastrowid
 
 
@@ -266,15 +266,17 @@ def set_bonus(c, unit: str, rules: dict) -> None:
     clean = {}
     for rarity, r in (rules or {}).items():
         if rarity not in RARITY_WEIGHTS:
-            raise ValueError("rareté inconnue")
+            raise ValueError("Rareté inconnue.")
         if r is None:
             continue
         lo, hi = r.get("min"), r.get("max")
         if not (isinstance(lo, int) and isinstance(hi, int)) or isinstance(lo, bool) or isinstance(hi, bool) or not 0 <= lo <= hi <= MAX_BONUS or hi < 1:
-            raise ValueError("bonus invalide")
+            raise ValueError("Bonus invalide : des nombres entiers de 0 à 100, le minimum au plus égal au maximum.")
         clean[rarity] = (lo, hi)
-    if len(unit) > 20 or (clean and not unit):
-        raise ValueError("nom de l'unité invalide")
+    if len(unit) > 20:
+        raise ValueError("Le nom de la monnaie est limité à 20 caractères.")
+    if clean and not unit:
+        raise ValueError("Indique le nom de la monnaie (par exemple « crédits ») pour activer un bonus.")
     c.execute("DELETE FROM bonus_rules")
     c.executemany("INSERT INTO bonus_rules (rarity, min, max) VALUES (?,?,?)", [(k, lo, hi) for k, (lo, hi) in clean.items()])
     c.execute("INSERT OR REPLACE INTO settings (key, value) VALUES ('bonus_unit', ?)", (unit,))

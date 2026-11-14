@@ -203,3 +203,4 @@
 #goals .g-bonusrow { display:flex; align-items:center; gap:.4rem; padding:.15rem .4rem; border-left:4px solid var(--rc); } #goals .g-bonusrow b { min-width:6.5rem; color:var(--rc); }
 #goals .g-num { width:4.2rem; font:inherit; padding:.35rem .4rem; border:1px solid var(--line); border-radius:8px; background:var(--bg); color:var(--fg); text-align:center; }
 #goals .g-bonusform .btn { justify-self:start; margin-top:.3rem; }
+#goals .g-rwerr { margin:.2rem 0 0; min-height:1.2em; color:var(--late); font-size:.9rem; font-weight:600; }
