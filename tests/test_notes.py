@@ -23,6 +23,8 @@ with TestClient(app) as c:
     gr = c.get("/api/grades/seen") if False else None
     page = c.get("/").text
     assert "const GRADES" in page and 'id="notes"' in page and "/static/notes.js" in page and 'id="nbadge"' in page
+    js = c.get("/static/notes.js").text
+    assert "Par matière" in js and "Chronologique" in js and "Toute l'année" in js, "vues chronologique / par matière, filtre par trimestre"
     with db.conn() as x:
         assert x.execute("SELECT COUNT(*) FROM grades WHERE seen_at IS NULL").fetchone()[0] == 0   # historique : déjà vu
 

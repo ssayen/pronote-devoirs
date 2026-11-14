@@ -9,7 +9,25 @@
   const fmtDate = d => new Date(d + "T12:00:00").toLocaleDateString("fr-FR", { weekday: "short", day: "numeric", month: "short" });
   const fmtShort = d => new Date(d + "T12:00:00").toLocaleDateString("fr-FR", { day: "numeric", month: "short" });
   const gradesList = GRADES;                       // déjà triées : date décroissante
-  let onlyNew = false;
+  let onlyNew = false, mode = "flux";                 // « flux » : liste chronologique (par défaut) ; « matiere » : regroupées par matière, filtrées par trimestre
+
+  // périodes (trimestres) qui ont des notes, dans l'ordre de l'année ; « courante » : celle qui contient aujourd'hui, sinon la dernière commencée
+  const PERIODS = (() => {
+    const order = RESULTS.periods.map(p => p.name), at = n => (order.indexOf(n) < 0 ? 99 : order.indexOf(n));
+    return [...new Set(gradesList.map(g => g.period))].sort((a, b) => at(a) - at(b));
+  })();
+  function currentPeriod() {
+    const info = RESULTS.periods.filter(p => PERIODS.includes(p.name));
+    const inside = info.find(p => p.start && p.end && p.start <= TODAY && TODAY <= p.end);
+    const started = info.filter(p => !p.start || p.start <= TODAY);
+    return (inside || started[started.length - 1] || info[info.length - 1] || {}).name || PERIODS[PERIODS.length - 1] || null;
+  }
+  let period = currentPeriod();                       // null = toute l'année
+  const mean = (list, key) => {                       // moyenne pondérée par les coefficients (comme Pronote) ; null s'il n'y a rien à moyenner
+    let s = 0, w = 0;
+    for (const g of list) { const v = g[key]; if (v == null) continue; const c = g.coef == null ? 1 : g.coef; s += v * c; w += c; }
+    return w ? s / w : null;
+  };
 
   const unseenIds = () => gradesList.filter(g => g.unseen).map(g => g.id);
   function badge() {
@@ -30,12 +48,12 @@
     } catch (e) { if (!keepalive) toast("Enregistrement impossible, réessayer"); }
   }
 
-  function row(g) {
+  function row(g, grouped = false) {   // grouped : vue par matière, la matière est déjà le titre
     const li = el("li", "nrow" + (g.unseen ? " new" : ""));
     const left = el("div", "n-main");
-    const t = el("div", "n-subj"); t.append(icon(g.subject) + " " + pretty(g.subject));
+    const t = el("div", "n-subj"); t.append(grouped ? fmtDate(g.date) : icon(g.subject) + " " + pretty(g.subject));
     if (g.unseen) t.append(el("span", "n-new", "Nouvelle"));
-    const meta = [fmtDate(g.date)];
+    const meta = grouped ? [] : [fmtDate(g.date)];
     if (g.added && g.added > g.date) meta.push(`ajoutée le ${fmtShort(g.added)}`);   // note saisie avec une date ancienne
     if (g.coef != null && g.coef !== 1) meta.push(`coef ${nf.format(g.coef)}`);
     if (g.class_avg != null) meta.push(`classe ${nf.format(g.class_avg)}` + (g.max != null ? ` (max ${nf.format(g.max)})` : ""));
@@ -53,17 +71,48 @@
     s.append(ul); return s;
   }
 
+  function subjectView(bar) {
+    const chips = el("div", "chips"); chips.setAttribute("role", "group"); chips.setAttribute("aria-label", "Trimestre");
+    for (const [label, val] of [...PERIODS.map(n => [n, n]), ["Toute l'année", null]]) {
+      const b = el("button", "chip", label); b.type = "button"; b.setAttribute("aria-pressed", period === val);
+      b.onclick = () => { period = val; draw(); }; chips.append(b);
+    }
+    root.append(chips);
+    const list = gradesList.filter(g => period === null || g.period === period);
+    if (!list.length) { root.append(el("div", "rempty", "Aucune note pour cette période.")); return; }
+    const by = new Map();
+    for (const g of list) { if (!by.has(g.subject)) by.set(g.subject, []); by.get(g.subject).push(g); }
+    const groups = [...by.entries()].sort(([a, x], [b, y]) => (y.some(g => g.unseen) - x.some(g => g.unseen)) || pretty(a).localeCompare(pretty(b), "fr"));   // matières avec des notes non vues d'abord
+    for (const [subj, notes] of groups) {
+      const sec = el("section", "rcard"), h = el("h2", "n-gh");
+      const m = mean(notes, "grade"), c = mean(notes, "class_avg"), fresh = notes.filter(g => g.unseen).length;
+      h.append(el("span", null, icon(subj) + " " + pretty(subj)));
+      if (fresh) h.append(el("span", "n-new", `${fresh} nouvelle${fresh > 1 ? "s" : ""}`));
+      const stat = el("span", "n-avg" + (m != null && c != null ? (m > c + 0.05 ? " up" : m < c - 0.05 ? " down" : "") : ""));
+      stat.append(m == null ? "" : `Moyenne ${nf.format(m)}`, c == null ? "" : el("small", null, ` · classe ${nf.format(c)}`), el("small", null, ` · ${notes.length} note${notes.length > 1 ? "s" : ""}`));
+      h.append(stat); sec.append(h);
+      const ul = el("ul", "nlist"); for (const g of notes) ul.append(row(g, true)); sec.append(ul); root.append(sec);
+    }
+  }
+
   function draw() {
     root.replaceChildren();
     badge();
     if (!gradesList.length) { root.append(el("div", "rempty", "Pas encore de notes. Elles apparaîtront après la prochaine synchronisation avec Pronote.")); return; }
     const fresh = gradesList.filter(g => g.unseen), rest = gradesList.filter(g => !g.unseen);
+    const views = el("div", "chips"); views.setAttribute("role", "group"); views.setAttribute("aria-label", "Affichage");
+    for (const [label, val] of [["🕒 Chronologique", "flux"], ["📚 Par matière", "matiere"]]) {
+      const b = el("button", "chip", label); b.type = "button"; b.setAttribute("aria-pressed", mode === val);
+      b.onclick = () => { mode = val; draw(); }; views.append(b);
+    }
+    if (fresh.length && !READONLY) { const b = el("button", "chip", "✓ Tout marquer comme vu"); b.type = "button"; b.onclick = async () => { await markSeen(); draw(); }; views.append(b); }
+    root.append(views);
+    if (mode === "matiere") { subjectView(); return; }
     const bar = el("div", "chips"); bar.setAttribute("role", "group"); bar.setAttribute("aria-label", "Filtre");
     for (const [label, val] of [["Toutes", false], [`Pas encore vues (${fresh.length})`, true]]) {
       const b = el("button", "chip", label); b.type = "button"; b.setAttribute("aria-pressed", onlyNew === val);
       b.onclick = () => { onlyNew = val; draw(); }; bar.append(b);
     }
-    if (fresh.length && !READONLY) { const b = el("button", "chip", "✓ Tout marquer comme vu"); b.type = "button"; b.onclick = async () => { await markSeen(); draw(); }; bar.append(b); }
     root.append(bar);
     if (onlyNew) {
       root.append(fresh.length ? section(READONLY ? "Pas encore vues par l'élève" : "Pas encore vues", fresh) : el("div", "rempty", "Toutes les notes ont été vues."));
