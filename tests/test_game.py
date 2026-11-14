@@ -140,11 +140,21 @@ with db.conn() as c:
     c.execute("INSERT INTO grades (id, period, subject, date, grade, class_avg) VALUES ('ac9', 'T1', 'X', ?, 14, 11)", (iso(0),))
     assert game.progress(c, m)["done"] is True
 
-    # --- niveaux et paquets : un paquet par niveau, ouvert une seule fois ---
-    c.execute("DELETE FROM points"); game.award(c, "mission", "t1", 25, "test")
+    # --- sans récompense définie : pas de paquet, le niveau est seulement célébré (animation) ---
+    c.execute("DELETE FROM points"); c.execute("DELETE FROM packs"); c.execute("DELETE FROM levelups"); c.execute("DELETE FROM settings WHERE key = 'level_seen'")
+    game.ensure_packs(c)                                                          # premier passage : niveau actuel (1) mémorisé, rien de rétroactif
+    game.award(c, "mission", "t0", 12, "test"); game.ensure_packs(c); game.ensure_packs(c)
+    assert c.execute("SELECT COUNT(*) FROM packs").fetchone()[0] == 0 and game.summary(c)["levelup"] == [2] and game.summary(c)["has_rewards"] is False
+    try: c.execute("INSERT INTO packs (level) VALUES (50)"); game.open_pack(c, 50); raise SystemExit("ouverture sans récompense acceptée")
+    except game.NoRewards: pass
+    c.execute("DELETE FROM packs WHERE level = 50")
+    game.mark_celebrated(c, [], [2]); assert game.summary(c)["levelup"] == []
+    # --- avec récompenses : un paquet par niveau, ouvert une seule fois ---
+    game.load_examples(c); assert game.load_examples(c) == 0, "les exemples ne se chargent qu'une fois"
+    c.execute("DELETE FROM points"); game.award(c, "mission", "t1", 25, "test"); c.execute("INSERT OR REPLACE INTO settings (key, value) VALUES ('level_seen', '1')")
     game.ensure_packs(c); game.ensure_packs(c)
     assert [r[0] for r in c.execute("SELECT level FROM packs ORDER BY level")] == [2, 3]
-    r = game.open_pack(c, 2); assert r in game.REWARDS and c.execute("SELECT rarity FROM packs WHERE level = 2").fetchone()[0] == r["rarity"] and game.open_pack(c, 2) is None and game.open_pack(c, 9) is None
+    r = game.open_pack(c, 2); assert r["label"] in {x["label"] for x in game.EXAMPLE_REWARDS} and c.execute("SELECT rarity FROM packs WHERE level = 2").fetchone()[0] == r["rarity"] and game.open_pack(c, 2) is None and game.open_pack(c, 9) is None
     assert game.summary(c)["packs"] == 1
 
 # --- API ---
@@ -156,9 +166,9 @@ with TestClient(app) as cl:
     cel = [m["label"] for m in cl.get("/api/game").json()["celebrate"]]
     assert "fête" in cel and "celebrate" in cl.get("/").text, cel
     ids = [m["id"] for m in cl.get("/api/game").json()["celebrate"]]
-    assert cl.post("/api/missions/celebrated", json={"ids": ids}).json() == {"celebrate": []} and cl.get("/api/game").json()["celebrate"] == []
+    assert cl.post("/api/missions/celebrated", json={"ids": ids}).json()["celebrate"] == [] and cl.get("/api/game").json()["celebrate"] == []
     assert g["level"] >= 3 and any(p["level"] == 3 and not p["opened_at"] for p in g["packs_list"]) and g["missions"] and g["history"]
-    j = cl.post("/api/packs/3/open").json(); assert j["reward"] in game.BY_LABEL and j["rarity"] in game.RARITY_WEIGHTS and j["icon"]
+    j = cl.post("/api/packs/3/open").json(); assert j["reward"] in {x["label"] for x in game.EXAMPLE_REWARDS} and j["rarity"] in game.RARITY_WEIGHTS and j["icon"]
     assert cl.post("/api/packs/3/open").status_code == 404
     assert cl.post("/api/packs/3/delivered", json={"delivered": True}).status_code == 200
     assert next(x for x in cl.get("/api/game").json()["packs_list"] if x["level"] == 3)["delivered_at"]
@@ -175,7 +185,38 @@ with TestClient(app) as cl:
 import random as _r
 rng = _r.Random(0); seen = {}
 with db.conn() as c:
+    c.execute("DELETE FROM rewards"); game.load_examples(c)
     for lv in range(100, 400):
         c.execute("INSERT INTO packs (level) VALUES (?)", (lv,)); r = game.open_pack(c, lv, rng); seen[r["rarity"]] = seen.get(r["rarity"], 0) + 1
 assert set(seen) == set(game.RARITY_WEIGHTS) and seen["common"] > seen["rare"] > seen["epic"] > seen["legendary"] > 0, seen   # rareté pondérée
+# raretés sans récompense : jamais tirées ; une seule rareté définie : toujours celle-là
+with db.conn() as c:
+    c.execute("DELETE FROM rewards WHERE rarity != 'rare'")
+    got = set()
+    for lv in range(500, 540):
+        c.execute("INSERT INTO packs (level) VALUES (?)", (lv,)); got.add(game.open_pack(c, lv, rng)["rarity"])
+    assert got == {"rare"}, got
+    # validations
+    for bad in (("", "rare", ""), ("x", "mythique", ""), ("x" * 81, "rare", ""), ("x", "rare", "123456789")):
+        try: game.add_reward(c, *bad); raise SystemExit(f"récompense invalide acceptée : {bad}")
+        except ValueError: pass
+# bonus systématique : nombre tiré entre min et max, unité, singulier / pluriel, remise séparée
+assert game.bonus_text(1, "crédits") == "1 crédit" and game.bonus_text(3, "crédits") == "3 crédits" and game.bonus_text(2, "jeton") == "2 jeton"
+with db.conn() as c:
+    game.set_bonus(c, "crédits", {"rare": {"min": 1, "max": 3}, "common": None})
+    assert game.bonus_config(c) == {"unit": "crédits", "rules": {"rare": {"min": 1, "max": 3}}}
+    vals = set()
+    for lv in range(600, 660):
+        c.execute("INSERT INTO packs (level) VALUES (?)", (lv,)); r = game.open_pack(c, lv, rng); vals.add(r["bonus_n"])
+        assert r["bonus"] == game.bonus_text(r["bonus_n"], "crédits")
+    assert vals == {1, 2, 3}, vals
+    assert c.execute("SELECT bonus_n, bonus_unit FROM packs WHERE level = 600").fetchone()[1] == "crédits"
+    assert game.set_delivered(c, 600, True, "bonus") and c.execute("SELECT bonus_delivered_at, delivered_at FROM packs WHERE level = 600").fetchone()[0] and c.execute("SELECT delivered_at FROM packs WHERE level = 600").fetchone()[0] is None
+    assert game.set_delivered(c, 600, False, "bonus")
+    # pas de bonus pour une rareté sans règle ; pas de remise « bonus » s'il n'y en a pas
+    game.set_bonus(c, "crédits", {}); c.execute("INSERT INTO packs (level) VALUES (700)"); r = game.open_pack(c, 700, rng)
+    assert r["bonus"] is None and not game.set_delivered(c, 700, True, "bonus")
+    for bad in (("", {"rare": {"min": 1, "max": 3}}), ("x" * 21, {}), ("c", {"rare": {"min": 3, "max": 1}}), ("c", {"rare": {"min": 0, "max": 0}}), ("c", {"mythique": {"min": 1, "max": 2}}), ("c", {"rare": {"min": 1, "max": 101}})):
+        try: game.set_bonus(c, *bad); raise SystemExit(f"bonus invalide accepté : {bad}")
+        except ValueError: pass
 print("OK jeu")

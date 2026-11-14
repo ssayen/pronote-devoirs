@@ -123,11 +123,32 @@ with TestClient(app) as a, TestClient(app) as b:
         # le parent coche les récompenses remises (seule écriture permise), l'élève ne le peut pas
         with db.as_user(uid_of("bob")), db.conn() as c:
             from app import game as _g
-            c.execute("INSERT OR IGNORE INTO packs (level) VALUES (2)"); _g.open_pack(c, 2)
+            _g.load_examples(c); c.execute("INSERT OR IGNORE INTO packs (level) VALUES (2)"); _g.open_pack(c, 2)
             c.execute("INSERT OR IGNORE INTO packs (level) VALUES (3)")
         assert p.post("/api/packs/2/delivered", json={"delivered": True}).status_code == 200
         assert [x["delivered_at"] is not None for x in p.get("/api/game").json()["packs_list"] if x["level"] == 2] == [True]
         assert b.get("/api/game").json()["packs_list"][-1]["delivered_at"] is not None, "l'élève voit que la récompense est remise"
+        # récompenses : le parent les définit (par rareté), l'élève ne peut ni les voir ni les modifier
+        assert b.get("/api/rewards").status_code == 403 and b.post("/api/rewards", json={"label": "x", "rarity": "rare"}).status_code == 403
+        n0 = len(p.get("/api/rewards").json()["rewards"])
+        r = p.post("/api/rewards", json={"label": "Une glace", "rarity": "common", "icon": "🍦"}); assert r.status_code == 200
+        rid = r.json()["id"]; assert any(x["id"] == rid and x["rarity"] == "common" for x in r.json()["rewards"]) and len(r.json()["rewards"]) == n0 + 1
+        assert p.put(f"/api/rewards/{rid}", json={"label": "Deux glaces", "rarity": "rare", "icon": "🍨"}).json()["rewards"][-1]["label"] == "Deux glaces"
+        assert p.post("/api/rewards", json={"label": "x", "rarity": "mythique"}).status_code == 422 and p.put("/api/rewards/99999", json={"label": "x", "rarity": "rare"}).status_code == 404
+        assert p.delete(f"/api/rewards/{rid}").status_code == 200 and p.delete(f"/api/rewards/{rid}").status_code == 404
+        assert len(p.get("/api/rewards").json()["rewards"]) == n0 and b.delete("/api/rewards/1").status_code == 403
+        assert p.post("/api/packs/3/open").status_code == 403, "le parent n'ouvre pas les paquets"
+        # bonus systématique (crédits) : défini par le parent, tiré à l'ouverture, remis séparément
+        assert b.put("/api/rewards/bonus", json={"unit": "crédits", "rules": {}}).status_code == 403
+        assert p.put("/api/rewards/bonus", json={"unit": "crédits", "rules": {"common": {"min": 2, "max": 2}, "rare": {"min": 1, "max": 1}, "epic": {"min": 3, "max": 3}, "legendary": {"min": 5, "max": 5}}}).status_code == 200
+        assert p.put("/api/rewards/bonus", json={"unit": "", "rules": {"rare": {"min": 1, "max": 2}}}).status_code == 422 and p.put("/api/rewards/bonus", json={"unit": "c", "rules": {"rare": {"min": 3, "max": 1}}}).status_code == 422
+        assert p.get("/api/rewards").json()["bonus"]["unit"] == "crédits"
+        with db.as_user(uid_of("bob")), db.conn() as c:
+            c.execute("INSERT OR IGNORE INTO packs (level) VALUES (4)")
+        j = b.post("/api/packs/4/open").json(); assert j["bonus"] and j["bonus"].split()[1].startswith("crédit"), j
+        assert b.post("/api/packs/4/delivered", json={"delivered": True, "part": "bonus"}).status_code == 403
+        assert p.post("/api/packs/4/delivered", json={"delivered": True, "part": "bonus"}).status_code == 200
+        pk = next(x for x in p.get("/api/game").json()["packs_list"] if x["level"] == 4); assert pk["bonus_delivered_at"] and not pk["delivered_at"] and pk["bonus"] == j["bonus"]
         assert b.post("/api/packs/2/delivered", json={"delivered": False}).status_code == 403
         assert p.post("/api/packs/3/delivered", json={"delivered": True}).status_code == 404, "paquet non ouvert"
         assert p.post("/api/packs/2/delivered", json={"delivered": False}).status_code == 200
@@ -159,7 +180,7 @@ with TestClient(app) as t:
     assert t.post("/api/packs/%d/open" % g2["packs_list"][0]["level"]).status_code == 200
     assert t.post("/api/admin/points", json={"points": 0}).status_code == 422
     r = t.post("/api/admin/mission-done"); assert r.status_code == 200 and [m["label"] for m in r.json()["celebrate"]] == ["Mission de test"]
-    assert t.post("/api/missions/celebrated", json={"ids": [m["id"] for m in r.json()["celebrate"]]}).json() == {"celebrate": []}
+    assert t.post("/api/missions/celebrated", json={"ids": [m["id"] for m in r.json()["celebrate"]]}).json()["celebrate"] == []
     assert t.post("/api/reconnect", json={"image": "x", "pin": "1234"}).status_code == 403
     assert t.post("/sync", follow_redirects=False).status_code == 303
     with db.as_user(aid), db.conn() as c: assert c.execute("SELECT COUNT(*) FROM sync_log").fetchone()[0] == 0

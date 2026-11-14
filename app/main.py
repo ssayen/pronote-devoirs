@@ -175,15 +175,17 @@ def api_game(request: Request):
 
 
 class CelebratedIn(BaseModel):
-    ids: list[int] = Field(max_length=20)
+    ids: list[int] = Field(default_factory=list, max_length=20)
+    levels: list[int] = Field(default_factory=list, max_length=50)
 
 
 @app.post("/api/missions/celebrated")
 def api_celebrated(body: CelebratedIn):
     """L'élève a vu la célébration de ces missions réussies. Bloqué pour le parent (lecture seule)."""
     with db.conn() as c:
-        game.mark_celebrated(c, body.ids)
-        return {"celebrate": game.summary(c)["celebrate"]}
+        game.mark_celebrated(c, body.ids, body.levels)
+        s = game.summary(c)
+        return {"celebrate": s["celebrate"], "levelup": s["levelup"]}
 
 
 class PointsIn(BaseModel):
@@ -217,6 +219,7 @@ def admin_mission_done(request: Request):
 
 class DeliveredIn(BaseModel):
     delivered: bool
+    part: Literal["reward", "bonus"] = "reward"     # la récompense ou son bonus (ex. crédits), remis séparément
 
 
 @app.post("/api/packs/{level}/delivered")
@@ -225,7 +228,7 @@ def pack_delivered(level: int, body: DeliveredIn, request: Request):
     if (request.state.user or {}).get("role") not in ("parent", "admin") and not db.LOCAL:
         raise HTTPException(403, "Réservé au parent.")
     with db.conn() as c:
-        if not game.set_delivered(c, level, body.delivered):
+        if not game.set_delivered(c, level, body.delivered, body.part):
             raise HTTPException(404, "Récompense introuvable (paquet non ouvert).")
     return {"level": level, "delivered": body.delivered}
 
@@ -233,10 +236,96 @@ def pack_delivered(level: int, body: DeliveredIn, request: Request):
 @app.post("/api/packs/{level}/open")
 def open_pack(level: int):
     with db.conn() as c:
-        reward = game.open_pack(c, level)
+        try:
+            reward = game.open_pack(c, level)
+        except game.NoRewards:
+            raise HTTPException(409, "Aucune récompense n'est définie pour le moment.")
     if reward is None:
         raise HTTPException(404, "Paquet introuvable ou déjà ouvert.")
-    return {"level": level, "reward": reward["label"], "rarity": reward["rarity"], "icon": reward["icon"]}
+    return {"level": level, "reward": reward["label"], "rarity": reward["rarity"], "icon": reward["icon"], "bonus": reward["bonus"]}
+
+
+# ---- récompenses de l'élève : définies par le parent (l'administrateur aussi, pour tester) ; l'élève ne les voit pas, pour garder la surprise ----
+
+def _rewards_manager(request: Request) -> None:
+    if not db.LOCAL and (request.state.user or {}).get("role") not in ("parent", "admin"):
+        raise HTTPException(403, "Réservé au parent.")
+
+
+class RewardIn(BaseModel):
+    label: str = Field(min_length=1, max_length=80)
+    rarity: str
+    icon: str = Field(default="", max_length=8)
+
+
+@app.get("/api/rewards")
+def api_rewards(request: Request):
+    _rewards_manager(request)
+    with db.conn() as c:
+        return {"rewards": game.rewards_list(c), "weights": game.RARITY_WEIGHTS, "examples": len(game.EXAMPLE_REWARDS), "bonus": game.bonus_config(c)}
+
+
+@app.post("/api/rewards")
+def api_reward_add(body: RewardIn, request: Request):
+    _rewards_manager(request)
+    with db.conn() as c:
+        try:
+            rid = game.add_reward(c, body.label, body.rarity, body.icon)
+        except ValueError as e:
+            raise HTTPException(422, str(e))
+        return {"id": rid, "rewards": game.rewards_list(c)}
+
+
+class BonusRule(BaseModel):
+    min: int = Field(ge=0, le=100)
+    max: int = Field(ge=0, le=100)
+
+
+class BonusIn(BaseModel):
+    unit: str = Field(default="", max_length=20)
+    rules: dict[str, BonusRule | None] = Field(default_factory=dict)
+
+
+@app.put("/api/rewards/bonus")
+def api_reward_bonus(body: BonusIn, request: Request):
+    """Bonus systématique en plus de la récompense tirée (ex. 1 à 3 crédits), par rareté."""
+    _rewards_manager(request)
+    with db.conn() as c:
+        try:
+            game.set_bonus(c, body.unit, {k: (v.model_dump() if v else None) for k, v in body.rules.items()})
+        except ValueError as e:
+            raise HTTPException(422, str(e))
+        return {"bonus": game.bonus_config(c)}
+
+
+@app.post("/api/rewards/examples")
+def api_reward_examples(request: Request):
+    _rewards_manager(request)
+    with db.conn() as c:
+        n = game.load_examples(c)
+        return {"added": n, "rewards": game.rewards_list(c)}
+
+
+@app.put("/api/rewards/{rid}")
+def api_reward_update(rid: int, body: RewardIn, request: Request):
+    _rewards_manager(request)
+    with db.conn() as c:
+        try:
+            ok = game.update_reward(c, rid, body.label, body.rarity, body.icon)
+        except ValueError as e:
+            raise HTTPException(422, str(e))
+        if not ok:
+            raise HTTPException(404, "Récompense introuvable.")
+        return {"rewards": game.rewards_list(c)}
+
+
+@app.delete("/api/rewards/{rid}")
+def api_reward_delete(rid: int, request: Request):
+    _rewards_manager(request)
+    with db.conn() as c:
+        if not game.delete_reward(c, rid):
+            raise HTTPException(404, "Récompense introuvable.")
+        return {"rewards": game.rewards_list(c)}
 
 
 @app.get("/api/results")

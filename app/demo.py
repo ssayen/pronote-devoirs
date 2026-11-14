@@ -81,6 +81,7 @@ def seed() -> None:
     if not has_lessons:
         seed_lessons()
     with db.conn() as c:
+        game.load_examples(c)   # récompenses d'exemple pour tester les paquets (le parent les définit en vrai)
         has_grades = c.execute("SELECT 1 FROM grades LIMIT 1").fetchone()
     if not has_grades:
         seed_grades()

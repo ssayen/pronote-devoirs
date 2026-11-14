@@ -127,7 +127,27 @@ CREATE TABLE IF NOT EXISTS packs (        -- un paquet par niveau atteint
     opened_at  TEXT,
     reward     TEXT,
     rarity     TEXT,
-    delivered_at TEXT                     -- remis à l'élève (coché par le parent)
+    delivered_at TEXT,                    -- remis à l'élève (coché par le parent)
+    icon       TEXT,
+    bonus_n    INTEGER,                   -- bonus systématique tiré à l'ouverture (ex. 2 crédits), en plus de la récompense
+    bonus_unit TEXT,
+    bonus_delivered_at TEXT
+);
+CREATE TABLE IF NOT EXISTS bonus_rules (  -- bonus systématique par rareté : un nombre tiré entre min et max ; l'unité (« crédits ») est dans settings.bonus_unit
+    rarity TEXT PRIMARY KEY,
+    min    INTEGER NOT NULL,
+    max    INTEGER NOT NULL
+);
+CREATE TABLE IF NOT EXISTS rewards (      -- récompenses propres à l'élève, définies par le parent ; aucune = pas de paquets
+    id     INTEGER PRIMARY KEY AUTOINCREMENT,
+    rarity TEXT NOT NULL,                 -- common | rare | epic | legendary
+    label  TEXT NOT NULL,
+    icon   TEXT NOT NULL DEFAULT ''
+);
+CREATE TABLE IF NOT EXISTS levelups (     -- niveaux gagnés sans paquet (aucune récompense définie) : célébrés par une animation
+    level         INTEGER PRIMARY KEY,
+    reached_at    TEXT NOT NULL DEFAULT (datetime('now')),
+    celebrated_at TEXT
 );
 CREATE TABLE IF NOT EXISTS settings (     -- personnalisation de l'interface (clé / valeur), conservée dans le volume de données
     key   TEXT PRIMARY KEY,
@@ -191,6 +211,11 @@ def init() -> None:
             c.execute("UPDATE missions SET celebrated_at = datetime('now') WHERE status != 'active'")
         if "rarity" not in {r["name"] for r in c.execute("PRAGMA table_info(packs)")}:
             c.execute("ALTER TABLE packs ADD COLUMN rarity TEXT")
+        if "icon" not in {r["name"] for r in c.execute("PRAGMA table_info(packs)")}:
+            c.execute("ALTER TABLE packs ADD COLUMN icon TEXT")
+        for col, ddl in (("bonus_n", "INTEGER"), ("bonus_unit", "TEXT"), ("bonus_delivered_at", "TEXT")):
+            if col not in {r["name"] for r in c.execute("PRAGMA table_info(packs)")}:
+                c.execute(f"ALTER TABLE packs ADD COLUMN {col} {ddl}")
         if "delivered_at" not in {r["name"] for r in c.execute("PRAGMA table_info(packs)")}:
             c.execute("ALTER TABLE packs ADD COLUMN delivered_at TEXT")
         if "kind" not in {r["name"] for r in c.execute("PRAGMA table_info(sync_log)")}:

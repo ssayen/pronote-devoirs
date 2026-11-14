@@ -20,9 +20,9 @@ OVERALL_UP = [(0.3, 2), (0.5, 5), (0.75, 7), (1, 10)]        # (écart maximal e
 OVERALL_UP_MIN_GAP = 0.2
 GRADES_ABOVE_CLASS = [(2, 1), (5, 3)]             # (nombre de notes au-dessus de la moyenne de la classe, points)
 GOOD_GRADES = [(3, 16, 2), (3, 18, 5), (3, 20, 10)]   # (nombre de notes, note minimale sur 20, points)
-# Liste provisoire : les vraies récompenses seront choisies par le parent. La rareté pilote l'animation d'ouverture.
+# Les récompenses sont propres à chaque élève et définies par le parent (table `rewards`) ; la rareté pilote l'animation d'ouverture.
 RARITY_WEIGHTS = {"common": 50, "rare": 30, "epic": 15, "legendary": 5}
-REWARDS = [   # les crédits sont des jetons de poker qui s'échangent contre du temps d'écran
+EXAMPLE_REWARDS = [   # liste d'exemples proposée au parent pour démarrer (« Charger la liste d'exemples »). Les crédits sont des jetons de poker qui s'échangent contre du temps d'écran
     {"label": "1 h d'écran gratuite", "rarity": "common", "icon": "⏰"},
     {"label": "5 crédits gratuits", "rarity": "common", "icon": "🪙"},
     {"label": "Apéro chips et boisson ce soir", "rarity": "common", "icon": "🥤"},
@@ -38,7 +38,7 @@ REWARDS = [   # les crédits sont des jetons de poker qui s'échangent contre du
     {"label": "Un super crédit", "rarity": "legendary", "icon": "💎"},
     {"label": "Un vêtement au choix (prix raisonnable)", "rarity": "legendary", "icon": "👕"},
 ]
-BY_LABEL = {r["label"]: r for r in REWARDS}
+MAX_REWARDS = 100
 
 
 def grade_points(g: float) -> int:
@@ -209,27 +209,127 @@ def evaluate(c) -> None:
             c.execute("UPDATE missions SET status = 'expired' WHERE id = ?", (m["id"],))
 
 
-# ---- paquets ----
+# ---- récompenses de l'élève (définies par le parent) ----
+
+class NoRewards(Exception):
+    """Aucune récompense définie pour cet élève : un paquet ne peut pas être ouvert."""
+
+
+def rewards_list(c) -> list[dict]:
+    return [dict(r) for r in c.execute("SELECT id, rarity, label, icon FROM rewards ORDER BY id")]
+
+
+def has_rewards(c) -> bool:
+    return c.execute("SELECT 1 FROM rewards LIMIT 1").fetchone() is not None
+
+
+def _clean(label: str, rarity: str, icon: str) -> tuple[str, str, str]:
+    label, icon = (label or "").strip(), (icon or "").strip()
+    if not label or len(label) > 80 or rarity not in RARITY_WEIGHTS or len(icon) > 8:
+        raise ValueError("récompense invalide")
+    return label, rarity, icon
+
+
+def add_reward(c, label: str, rarity: str, icon: str = "") -> int:
+    label, rarity, icon = _clean(label, rarity, icon)
+    if c.execute("SELECT COUNT(*) FROM rewards").fetchone()[0] >= MAX_REWARDS:
+        raise ValueError("trop de récompenses")
+    return c.execute("INSERT INTO rewards (rarity, label, icon) VALUES (?,?,?)", (rarity, label, icon)).lastrowid
+
+
+def update_reward(c, rid: int, label: str, rarity: str, icon: str = "") -> bool:
+    label, rarity, icon = _clean(label, rarity, icon)
+    return c.execute("UPDATE rewards SET label = ?, rarity = ?, icon = ? WHERE id = ?", (label, rarity, icon, rid)).rowcount == 1
+
+
+def delete_reward(c, rid: int) -> bool:
+    return c.execute("DELETE FROM rewards WHERE id = ?", (rid,)).rowcount == 1
+
+
+# ---- bonus systématique (ex. « 1 à 3 crédits » en plus de la récompense, selon la rareté) ----
+
+MAX_BONUS = 100
+
+
+def bonus_text(n: int, unit: str) -> str:
+    """« 3 crédits » ; au singulier on retire le « s » final de l'unité (« 1 crédit »)."""
+    return f"{n} {unit[:-1] if n == 1 and unit.endswith('s') else unit}"
+
+
+def bonus_config(c) -> dict:
+    return {"unit": _setting(c, "bonus_unit", ""), "rules": {r["rarity"]: {"min": r["min"], "max": r["max"]} for r in c.execute("SELECT rarity, min, max FROM bonus_rules")}}
+
+
+def set_bonus(c, unit: str, rules: dict) -> None:
+    """rules : {rareté: {"min": n, "max": m} | None}. Les raretés absentes ou à None n'ont pas de bonus."""
+    unit = (unit or "").strip()
+    clean = {}
+    for rarity, r in (rules or {}).items():
+        if rarity not in RARITY_WEIGHTS:
+            raise ValueError("rareté inconnue")
+        if r is None:
+            continue
+        lo, hi = r.get("min"), r.get("max")
+        if not (isinstance(lo, int) and isinstance(hi, int)) or isinstance(lo, bool) or isinstance(hi, bool) or not 0 <= lo <= hi <= MAX_BONUS or hi < 1:
+            raise ValueError("bonus invalide")
+        clean[rarity] = (lo, hi)
+    if len(unit) > 20 or (clean and not unit):
+        raise ValueError("nom de l'unité invalide")
+    c.execute("DELETE FROM bonus_rules")
+    c.executemany("INSERT INTO bonus_rules (rarity, min, max) VALUES (?,?,?)", [(k, lo, hi) for k, (lo, hi) in clean.items()])
+    c.execute("INSERT OR REPLACE INTO settings (key, value) VALUES ('bonus_unit', ?)", (unit,))
+
+
+def load_examples(c) -> int:
+    """Charge la liste d'exemples, seulement si aucune récompense n'est encore définie."""
+    if has_rewards(c):
+        return 0
+    c.executemany("INSERT INTO rewards (rarity, label, icon) VALUES (?,?,?)", [(r["rarity"], r["label"], r["icon"]) for r in EXAMPLE_REWARDS])
+    return len(EXAMPLE_REWARDS)
+
+
+# ---- paquets et niveaux ----
 
 def ensure_packs(c) -> None:
+    """Chaque niveau gagné donne un paquet si l'élève a des récompenses ; sinon le niveau est seulement célébré par une animation (table levelups).
+    Le réglage `level_seen` mémorise le dernier niveau déjà traité : les niveaux passés ne sont jamais retraités."""
     level = level_info(total_points(c))["level"]
-    for lv in range(2, level + 1):
-        c.execute("INSERT OR IGNORE INTO packs (level) VALUES (?)", (lv,))
+    seen = _setting(c, "level_seen")
+    seen = level if seen is None else int(seen)
+    rich = has_rewards(c)
+    for lv in range(seen + 1, level + 1):
+        c.execute("INSERT OR IGNORE INTO packs (level) VALUES (?)" if rich else "INSERT OR IGNORE INTO levelups (level) VALUES (?)", (lv,))
+    c.execute("INSERT OR REPLACE INTO settings (key, value) VALUES ('level_seen', ?)", (str(max(seen, level)),))
+    for r in EXAMPLE_REWARDS:   # paquets ouverts avant que l'icône soit mémorisée
+        c.execute("UPDATE packs SET icon = ? WHERE reward = ? AND icon IS NULL", (r["icon"], r["label"]))
 
 
 def open_pack(c, level: int, rng=random) -> dict | None:
-    """Tire la rareté (pondérée) puis une récompense de cette rareté ; None si le paquet n'existe pas ou est déjà ouvert."""
-    rarity = rng.choices(list(RARITY_WEIGHTS), weights=list(RARITY_WEIGHTS.values()))[0]
-    reward = rng.choice([r for r in REWARDS if r["rarity"] == rarity])
-    ok = c.execute("UPDATE packs SET opened_at = datetime('now'), reward = ?, rarity = ? WHERE level = ? AND opened_at IS NULL",
-                   (reward["label"], reward["rarity"], level)).rowcount
-    return dict(reward) if ok else None
+    """Tire la rareté (pondérée, parmi les raretés qui ont au moins une récompense) puis une récompense de cette rareté.
+    None si le paquet n'existe pas ou est déjà ouvert ; NoRewards si l'élève n'a aucune récompense."""
+    if c.execute("SELECT 1 FROM packs WHERE level = ? AND opened_at IS NULL", (level,)).fetchone() is None:
+        return None
+    by: dict[str, list] = {}
+    for r in rewards_list(c):
+        by.setdefault(r["rarity"], []).append(r)
+    if not by:
+        raise NoRewards()
+    rarities = [k for k in RARITY_WEIGHTS if k in by]
+    rarity = rng.choices(rarities, weights=[RARITY_WEIGHTS[k] for k in rarities])[0]
+    reward = rng.choice(by[rarity])
+    cfg = bonus_config(c)
+    rule = cfg["rules"].get(rarity)
+    n = rng.randint(rule["min"], rule["max"]) if rule and cfg["unit"] else 0      # bonus systématique tiré entre min et max
+    ok = c.execute("UPDATE packs SET opened_at = datetime('now'), reward = ?, rarity = ?, icon = ?, bonus_n = ?, bonus_unit = ? WHERE level = ? AND opened_at IS NULL",
+                   (reward["label"], reward["rarity"], reward["icon"] or "🎁", n or None, cfg["unit"] if n else None, level)).rowcount
+    return {"label": reward["label"], "rarity": reward["rarity"], "icon": reward["icon"] or "🎁", "bonus": bonus_text(n, cfg["unit"]) if n else None, "bonus_n": n or None} if ok else None
 
 
-def set_delivered(c, level: int, delivered: bool) -> bool:
-    """Le parent coche (ou décoche) une récompense remise ; seulement pour un paquet ouvert."""
-    return c.execute("UPDATE packs SET delivered_at = " + ("datetime('now')" if delivered else "NULL") +
-                     " WHERE level = ? AND opened_at IS NOT NULL", (level,)).rowcount == 1
+def set_delivered(c, level: int, delivered: bool, part: str = "reward") -> bool:
+    """Le parent coche (ou décoche) la récompense remise (part="reward") ou son bonus (part="bonus") ; seulement pour un paquet ouvert."""
+    col, extra = ("bonus_delivered_at", " AND bonus_n > 0") if part == "bonus" else ("delivered_at", "")
+    return c.execute(f"UPDATE packs SET {col} = " + ("datetime('now')" if delivered else "NULL") +
+                     " WHERE level = ? AND opened_at IS NOT NULL" + extra, (level,)).rowcount == 1
 
 
 def update(c) -> None:
@@ -246,11 +346,14 @@ def summary(c) -> dict:
     info = level_info(total_points(c))
     info["packs"] = c.execute("SELECT COUNT(*) FROM packs WHERE opened_at IS NULL").fetchone()[0]
     info["celebrate"] = [dict(r) for r in c.execute("SELECT id, label, points FROM missions WHERE status = 'done' AND celebrated_at IS NULL ORDER BY done_at, id LIMIT 5")]
+    info["has_rewards"] = has_rewards(c)
+    info["levelup"] = [r[0] for r in c.execute("SELECT level FROM levelups WHERE celebrated_at IS NULL ORDER BY level")]   # niveaux gagnés sans paquet : animation
     return info
 
 
-def mark_celebrated(c, ids: list[int]) -> None:
+def mark_celebrated(c, ids: list[int], levels: list[int] | None = None) -> None:
     c.executemany("UPDATE missions SET celebrated_at = datetime('now') WHERE id = ? AND status = 'done' AND celebrated_at IS NULL", [(i,) for i in ids])
+    c.executemany("UPDATE levelups SET celebrated_at = datetime('now') WHERE level = ? AND celebrated_at IS NULL", [(lv,) for lv in (levels or [])])
 
 
 def overview(c) -> dict:
@@ -260,5 +363,6 @@ def overview(c) -> dict:
         d["progress"] = progress(c, m) if m["status"] == "active" else None
         missions.append(d)
     return {**summary(c), "missions": missions,
-            "packs_list": [{**dict(r), "icon": BY_LABEL.get(r["reward"], {}).get("icon")} for r in c.execute("SELECT level, opened_at, reward, rarity, delivered_at FROM packs ORDER BY level DESC")],
+            "packs_list": [{**dict(r), "bonus": bonus_text(r["bonus_n"], r["bonus_unit"]) if r["bonus_n"] else None}
+                           for r in c.execute("SELECT level, opened_at, reward, rarity, delivered_at, icon, bonus_n, bonus_unit, bonus_delivered_at FROM packs ORDER BY level DESC")],
             "history": [dict(r) for r in c.execute("SELECT at, points, label FROM points ORDER BY id DESC LIMIT 15")]}

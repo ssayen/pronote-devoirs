@@ -44,7 +44,7 @@ async def auth(request: Request):
         if user["role"] == "parent":  # un parent consulte les données de l'élève lié, sans pouvoir les modifier
             db.set_user(user["student_id"])
             request.state.readonly = True
-            cocher = request.url.path.startswith("/api/packs/") and request.url.path.endswith("/delivered")   # seule écriture permise
+            cocher = (request.url.path.startswith("/api/packs/") and request.url.path.endswith("/delivered")) or request.url.path.startswith("/api/rewards")   # seules écritures permises
             if request.method not in ("GET", "HEAD") and request.url.path != "/logout" and not cocher:
                 raise HTTPException(403, "Compte parent : consultation seulement.")
         else:

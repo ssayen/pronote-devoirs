@@ -141,7 +141,7 @@ const PackFX = (() => {
   const preload = () => PACK_IMGS.forEach(u => { const i = new Image(); i.src = u; });
   setTimeout(preload, 1500);
 
-  function open({ reward, rarity = "common", icon = "🎁", level }) {
+  function open({ reward, rarity = "common", icon = "🎁", level, bonus = null }) {
     return new Promise(resolve => {
       const R = RARITY[rarity] || RARITY.common;
       const calm = matchMedia("(prefers-reduced-motion: reduce)").matches;
@@ -162,6 +162,7 @@ const PackFX = (() => {
             <span class="pfx-rarity">${R.label}</span>
             <span class="pfx-icon">${icon}</span>
             <strong class="pfx-name"></strong>
+            ${bonus ? `<span class="pfx-bonus"></span>` : ""}
             <span class="pfx-lvl">Paquet du niveau ${level}</span>
           </div>
         </div>
@@ -170,6 +171,7 @@ const PackFX = (() => {
         <button type="button" class="pfx-skip">Passer</button>
         <button type="button" class="btn primary pfx-done">Super !</button>`;
       root.querySelector(".pfx-name").textContent = reward;
+      if (bonus) root.querySelector(".pfx-bonus").textContent = "+ " + bonus;
       const packEl = root.querySelector(".pfx-pack"); packEl.append(pack());
       const leak = packEl.querySelector(".pfx-leak");
       const canvas = root.querySelector(".pfx-canvas"), g = canvas.getContext("2d");
@@ -330,22 +332,22 @@ const PackFX = (() => {
   }
 
   // Célébration d'une mission réussie : trophée, confettis, points gagnés. Résout "packs" si l'élève veut aller ouvrir son paquet, sinon "ok".
-  function celebrate({ label, points, packs = 0 }) {
+  function celebrate({ label, points, packs = 0, level = 0 }) {   // level > 0 : changement de niveau sans paquet (pas de récompense définie)
     return new Promise(resolve => {
       const calm = matchMedia("(prefers-reduced-motion: reduce)").matches;
       const root = document.createElement("div");
-      root.className = "pfx pfx-mission"; root.setAttribute("role", "dialog"); root.setAttribute("aria-modal", "true"); root.setAttribute("aria-label", "Mission accomplie");
+      root.className = "pfx pfx-mission"; root.setAttribute("role", "dialog"); root.setAttribute("aria-modal", "true"); root.setAttribute("aria-label", level ? "Niveau supérieur" : "Mission accomplie");
       root.innerHTML = `<canvas class="pfx-canvas"></canvas><div class="pfx-vignette"></div><div class="pfx-rays"></div>
         <div class="pfx-win">
-          <div class="pfx-trophy" aria-hidden="true">🏆</div>
-          <h2 class="pfx-wt">Mission accomplie !</h2>
+          ${level ? `<div class="pfx-medal" aria-hidden="true"><small>Niveau</small><b>${level}</b></div>` : `<div class="pfx-trophy" aria-hidden="true">🏆</div>`}
+          <h2 class="pfx-wt">${level ? "Niveau supérieur !" : "Mission accomplie !"}</h2>
           <p class="pfx-wl"></p>
-          <div class="pfx-pts">+${points} point${points > 1 ? "s" : ""}</div>
+          ${level ? "" : `<div class="pfx-pts">+${points} point${points > 1 ? "s" : ""}</div>`}
           ${packs ? `<p class="pfx-wp">🎁 Un paquet t'attend !</p>` : ""}
           <div class="pfx-wb">${packs ? `<button type="button" class="btn primary pfx-pk">Ouvrir mon paquet</button>` : ""}<button type="button" class="btn${packs ? "" : " primary"} pfx-ok">${packs ? "Plus tard" : "Super !"}</button></div>
         </div>
         <button type="button" class="pfx-mute"></button>`;
-      root.querySelector(".pfx-wl").textContent = label;
+      root.querySelector(".pfx-wl").textContent = level ? (label || "Bravo, tu progresses !") : label;
       root.style.setProperty("--rc", "#ffb800");
       const prevFocus = document.activeElement, prevOverflow = document.body.style.overflow;
       document.body.style.overflow = "hidden"; document.body.append(root);
