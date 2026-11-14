@@ -48,6 +48,9 @@
     } catch (e) { if (!keepalive) toast("Enregistrement impossible, réessayer"); }
   }
 
+  const base = g => (g.out_of > 0 ? g.out_of : 20);
+  const orig = (g, v) => nf.format(Math.round(v * base(g) / 20 * 100) / 100);   // valeur ramenée sur 20 → barème d'origine
+
   function row(g, grouped = false) {   // grouped : vue par matière, la matière est déjà le titre
     const li = el("li", "nrow" + (g.unseen ? " new" : ""));
     const left = el("div", "n-main");
@@ -55,13 +58,14 @@
     if (g.unseen) t.append(el("span", "n-new", "Nouvelle"));
     const meta = grouped ? [] : [fmtDate(g.date)];
     if (g.added && g.added > g.date) meta.push(`ajoutée le ${fmtShort(g.added)}`);   // note saisie avec une date ancienne
-    if (g.coef != null && g.coef !== 1) meta.push(`coef ${nf.format(g.coef)}`);
-    if (g.class_avg != null) meta.push(`classe ${nf.format(g.class_avg)}` + (g.max != null ? ` (max ${nf.format(g.max)})` : ""));
+    if (g.class_avg != null) meta.push(`classe ${orig(g, g.class_avg)}` + (g.max != null ? ` (max ${orig(g, g.max)})` : ""));
     left.append(t, el("div", "n-meta", meta.join(" · ")));
     if (g.comment) left.append(el("div", "n-com", g.comment));
     const v = el("div", "n-val" + (g.class_avg == null ? "" : g.grade > g.class_avg + 0.05 ? " up" : g.grade < g.class_avg - 0.05 ? " down" : ""));
-    v.append(nf.format(g.grade), el("small", null, "/20"));
-    li.append(left, v);
+    v.append(orig(g, g.grade), el("small", null, "/" + nf.format(base(g))));
+    const r = el("div", "n-right"); r.append(v);
+    if (g.coef != null) r.append(el("span", "n-coef" + (g.coef !== 1 ? " big" : ""), `coef ${nf.format(g.coef)}`));   // toujours visible : la moyenne est pondérée
+    li.append(left, r);
     return li;
   }
 
@@ -89,7 +93,7 @@
       h.append(el("span", null, icon(subj) + " " + pretty(subj)));
       if (fresh) h.append(el("span", "n-new", `${fresh} nouvelle${fresh > 1 ? "s" : ""}`));
       const stat = el("span", "n-avg" + (m != null && c != null ? (m > c + 0.05 ? " up" : m < c - 0.05 ? " down" : "") : ""));
-      stat.append(m == null ? "" : `Moyenne ${nf.format(m)}`, c == null ? "" : el("small", null, ` · classe ${nf.format(c)}`), el("small", null, ` · ${notes.length} note${notes.length > 1 ? "s" : ""}`));
+      stat.append(m == null ? "" : `Moyenne ${nf.format(m)}/20`, c == null ? "" : el("small", null, ` · classe ${nf.format(c)}`), el("small", null, ` · ${notes.length} note${notes.length > 1 ? "s" : ""}`));
       h.append(stat); sec.append(h);
       const ul = el("ul", "nlist"); for (const g of notes) ul.append(row(g, true)); sec.append(ul); root.append(sec);
     }
