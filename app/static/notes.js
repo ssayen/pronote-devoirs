@@ -64,7 +64,7 @@
     const v = el("div", "n-val" + (g.class_avg == null ? "" : g.grade > g.class_avg + 0.05 ? " up" : g.grade < g.class_avg - 0.05 ? " down" : ""));
     v.append(orig(g, g.grade), el("small", null, "/" + nf.format(base(g))));
     const r = el("div", "n-right"); r.append(v);
-    if (g.coef != null) r.append(el("span", "n-coef" + (g.coef !== 1 ? " big" : ""), `coef ${nf.format(g.coef)}`));   // toujours visible : la moyenne est pondérée
+    if (g.coef != null && g.coef !== 1) r.append(el("span", "n-coef", `coef ${nf.format(g.coef)}`));   // seulement si ≠ 1 (la moyenne est pondérée)
     li.append(left, r);
     return li;
   }
